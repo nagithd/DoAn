@@ -200,7 +200,7 @@
                                     <TextBlock Text="Camera List" Style="{StaticResource CardTitleStyle}"/>
                                     <StackPanel Grid.Row="1">
                                         <TextBlock Text="Select camera" Style="{StaticResource LabelStyle}"/>
-                                        <ComboBox x:Name="CameraListCombo" Margin="0,4,0,8" ItemsSource="{Binding AvailableCameras}" SelectedIndex="0"/>
+                                        <ComboBox x:Name="CameraListCombo" Margin="0,4,0,8" ItemsSource="{Binding AvailableCameras}" SelectedItem="{Binding SelectedCameraName}"/>
                                         <Button Content="Refresh" Style="{StaticResource NeutralButton}" Command="{Binding RefreshCommand}"/>
                                     </StackPanel>
 

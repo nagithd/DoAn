@@ -22,14 +22,13 @@
 
             <!-- Camera area: two layered Grid children -->
             <Grid Grid.Row="1" Background="#252526" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                <!-- Layer 0: camera image / video surface (Stretch=Uniform) -->
-                <Viewbox StretchDirection="Both" Stretch="Uniform" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                    <!-- Placeholder visual for unavailable camera feed; when a real ImageSource is bound replace this with <Image Source="..." Stretch="Uniform" /> -->
-                    <Grid Width="1920" Height="1080" HorizontalAlignment="Center" VerticalAlignment="Center">
-                        <Rectangle Fill="#1E1E1E" RadiusX="2" RadiusY="2"/>
-                    <TextBlock Text="📷" FontSize="64" Foreground="{StaticResource SuccessBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Grid>
-                </Viewbox>
+                <!-- Layer 0: Live camera image / video surface (Stretch=Uniform) -->
+                <Image x:Name="CameraImage"
+                       Source="{Binding CameraFrame}"
+                       Stretch="Uniform"
+                       HorizontalAlignment="Stretch"
+                       VerticalAlignment="Stretch"
+                       RenderOptions.BitmapScalingMode="HighQuality"/>
 
                 <!-- Layer 1: overlay controls and status badges -->
                 <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False">
