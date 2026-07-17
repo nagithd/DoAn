@@ -1,0 +1,205 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+  <!-- Dark HMI palette (override and unify) -->
+  <Color x:Key="_WindowBackgroundColor">#FF1E1E1E</Color>
+  <Color x:Key="_CardBackgroundColor">#FF252526</Color>
+  <Color x:Key="_SecondaryBackgroundColor">#FF2D2D30</Color>
+  <Color x:Key="_BorderColor">#FF3E3E42</Color>
+  <Color x:Key="_AccentColor">#FF007ACC</Color>
+  <Color x:Key="_HoverBlueColor">#FF1F6FEB</Color>
+  <Color x:Key="_SelectedBlueColor">#FF0E639C</Color>
+  <Color x:Key="_TextColor">#FFFFFFFF</Color>
+  <Color x:Key="_SecondaryTextColor">#FFCCCCCC</Color>
+  <Color x:Key="_DisabledColor">#FF777777</Color>
+
+  <SolidColorBrush x:Key="WindowBackground" Color="{StaticResource _WindowBackgroundColor}"/>
+  <SolidColorBrush x:Key="CardBackground" Color="{StaticResource _CardBackgroundColor}"/>
+  <SolidColorBrush x:Key="SecondaryBackground" Color="{StaticResource _SecondaryBackgroundColor}"/>
+  <SolidColorBrush x:Key="BorderBrushColor" Color="{StaticResource _BorderColor}"/>
+  <SolidColorBrush x:Key="AccentColor" Color="{StaticResource _AccentColor}"/>
+  <SolidColorBrush x:Key="HoverBlue" Color="{StaticResource _HoverBlueColor}"/>
+  <SolidColorBrush x:Key="SelectedBlue" Color="{StaticResource _SelectedBlueColor}"/>
+  <SolidColorBrush x:Key="PrimaryText" Color="{StaticResource _TextColor}"/>
+  <SolidColorBrush x:Key="SecondaryText" Color="{StaticResource _SecondaryTextColor}"/>
+  <SolidColorBrush x:Key="DisabledColor" Color="{StaticResource _DisabledColor}"/>
+
+  <!-- ComboBox ControlTemplate -->
+  <Style TargetType="ComboBox">
+    <Setter Property="SnapsToDevicePixels" Value="True" />
+    <Setter Property="OverridesDefaultStyle" Value="True" />
+    <Setter Property="ScrollViewer.HorizontalScrollBarVisibility" Value="Auto" />
+    <Setter Property="ScrollViewer.VerticalScrollBarVisibility" Value="Auto" />
+    <Setter Property="MinWidth" Value="120" />
+    <Setter Property="MinHeight" Value="34" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBox">
+          <Grid>
+            <Border x:Name="Bd"
+                    Background="{StaticResource SecondaryBackground}"
+                    BorderBrush="{StaticResource BorderBrushColor}"
+                    BorderThickness="1"
+                    CornerRadius="4">
+              <Grid>
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Selection box -->
+                <ContentPresenter x:Name="ContentSite"
+                                  Margin="8,0,4,0"
+                                  VerticalAlignment="Center"
+                                  HorizontalAlignment="Left"
+                                  ContentTemplate="{TemplateBinding SelectionBoxItemTemplate}"
+                                  Content="{TemplateBinding SelectionBoxItem}"
+                                  RecognizesAccessKey="True"/>
+
+                <!-- Arrow button -->
+                <ToggleButton x:Name="ToggleBtn" Grid.Column="1" Focusable="False" IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
+                              Background="{StaticResource SecondaryBackground}" BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="0" Padding="10,0">
+                  <Path Data="M 0 0 L 4 4 L 8 0 Z" Fill="{StaticResource PrimaryText}" Width="12" Height="8" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                </ToggleButton>
+              </Grid>
+            </Border>
+
+            <!-- Popup / dropdown -->
+            <Popup x:Name="PART_Popup" Placement="Bottom" IsOpen="{TemplateBinding IsDropDownOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+              <Border Background="{StaticResource CardBackground}" BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="1" CornerRadius="4" Padding="4">
+                <ScrollViewer CanContentScroll="True" MinWidth="120" MaxHeight="320" VerticalScrollBarVisibility="Auto">
+                  <ItemsPresenter />
+                </ScrollViewer>
+              </Border>
+            </Popup>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="#FF383838" />
+              <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentColor}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter TargetName="Bd" Property="Background" Value="#2B2B2B" />
+            </Trigger>
+            <Trigger Property="IsKeyboardFocusWithin" Value="True">
+              <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentColor}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- ComboBoxItem style for dropdown items -->
+  <Style TargetType="ComboBoxItem">
+    <Setter Property="Background" Value="{StaticResource CardBackground}" />
+    <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+    <Setter Property="Padding" Value="6,4" />
+    <Setter Property="HorizontalContentAlignment" Value="Left" />
+    <Setter Property="VerticalContentAlignment" Value="Center" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="ComboBoxItem">
+          <Border x:Name="Bd" Background="Transparent">
+            <ContentPresenter />
+          </Border>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="{StaticResource HoverBlue}" />
+              <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="{StaticResource SelectedBlue}" />
+              <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Foreground" Value="{StaticResource DisabledColor}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- TabControl template -->
+  <Style TargetType="TabControl">
+    <Setter Property="Background" Value="{StaticResource WindowBackground}" />
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TabControl">
+          <Grid>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto" />
+              <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Border Background="{StaticResource WindowBackground}" BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="0,0,0,1">
+              <DockPanel IsItemsHost="False" LastChildFill="False" />
+            </Border>
+            <TabPanel x:Name="HeaderPanel" Grid.Row="0" IsItemsHost="True" Background="Transparent" Margin="0,0,0,8" />
+            <Border Grid.Row="1" Background="{StaticResource CardBackground}" BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="1" CornerRadius="6">
+              <ContentPresenter x:Name="PART_SelectedContentHost" ContentSource="SelectedContent" Margin="8"/>
+            </Border>
+          </Grid>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
+  <!-- TabItem style -->
+  <Style TargetType="TabItem">
+    <Setter Property="Template">
+      <Setter.Value>
+        <ControlTemplate TargetType="TabItem">
+          <Grid>
+            <Border x:Name="Bd" Background="{StaticResource SecondaryBackground}" BorderBrush="{StaticResource BorderBrushColor}" BorderThickness="1" CornerRadius="4" Padding="12,6" Margin="0,0,6,0">
+              <ContentPresenter x:Name="Content" ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+            </Border>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="#FF383838" />
+            </Trigger>
+            <Trigger Property="IsSelected" Value="True">
+              <Setter TargetName="Bd" Property="Background" Value="{StaticResource AccentColor}" />
+              <Setter TargetName="Bd" Property="BorderBrush" Value="{StaticResource AccentColor}" />
+              <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+              <Setter Property="Foreground" Value="{StaticResource DisabledColor}" />
+            </Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+    <Setter Property="Foreground" Value="{StaticResource SecondaryText}" />
+  </Style>
+
+  <!-- ListBox and ListBoxItem styles -->
+  <Style TargetType="ListBox">
+    <Setter Property="Background" Value="{StaticResource CardBackground}" />
+    <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}" />
+    <Setter Property="BorderThickness" Value="1" />
+    <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+  </Style>
+
+  <Style TargetType="ListBoxItem">
+    <Setter Property="Background" Value="Transparent" />
+    <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+    <Setter Property="Padding" Value="6,4" />
+    <Style.Triggers>
+      <Trigger Property="IsMouseOver" Value="True">
+        <Setter Property="Background" Value="{StaticResource HoverBlue}" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+      </Trigger>
+      <Trigger Property="IsSelected" Value="True">
+        <Setter Property="Background" Value="{StaticResource SelectedBlue}" />
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}" />
+      </Trigger>
+      <Trigger Property="IsEnabled" Value="False">
+        <Setter Property="Foreground" Value="{StaticResource DisabledColor}" />
+      </Trigger>
+    </Style.Triggers>
+  </Style>
+
+</ResourceDictionary>

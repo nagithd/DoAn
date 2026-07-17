@@ -1,0 +1,339 @@
+﻿<Window x:Class="WpfApp3.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:controls="clr-namespace:WpfApp3.Controls"
+        Title="Battery Inspection System - Industrial HMI"
+        Background="#1E1E1E"
+        WindowState="Maximized"
+        Height="900" Width="1400">
+
+    <!-- Simplified MainWindow: two main areas only -->
+    <Window.Resources>
+        <!-- Color Palette -->
+        <SolidColorBrush x:Key="WindowBackground" Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="CardBackground" Color="#252526"/>
+        <SolidColorBrush x:Key="SecondaryBackground" Color="#2D2D30"/>
+        <SolidColorBrush x:Key="BorderBrushColor" Color="#3E3E42"/>
+        <SolidColorBrush x:Key="AccentColor" Color="#007ACC"/>
+        <SolidColorBrush x:Key="SuccessColor" Color="#4EC9B0"/>
+        <SolidColorBrush x:Key="WarningColor" Color="#FFD166"/>
+        <SolidColorBrush x:Key="DangerColor" Color="#F14C4C"/>
+        <SolidColorBrush x:Key="PrimaryText" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SecondaryText" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="HintText" Color="#858585"/>
+
+        <!-- Card style -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="14"/>
+            <Setter Property="Margin" Value="0,0,0,12"/>
+        </Style>
+
+        <!-- Card title style -->
+        <Style x:Key="CardTitleStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Foreground" Value="{StaticResource SecondaryText}"/>
+            <Setter Property="Margin" Value="0,0,0,8"/>
+        </Style>
+
+        <!-- Label and value styles -->
+        <Style x:Key="LabelStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource HintText}"/>
+            <Setter Property="Margin" Value="0,0,0,4"/>
+        </Style>
+        <Style x:Key="ValueStyle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="13"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+        </Style>
+
+        <!-- Base button template -->
+        <Style x:Key="BaseButton" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="5" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="{StaticResource AccentColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentColor}"/>
+        </Style>
+        <Style x:Key="DangerButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="{StaticResource DangerColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource DangerColor}"/>
+        </Style>
+        <Style x:Key="SuccessButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="{StaticResource SuccessColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SuccessColor}"/>
+        </Style>
+        <Style x:Key="NeutralButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="#3A3A3D"/>
+            <Setter Property="BorderBrush" Value="#3A3A3D"/>
+        </Style>
+
+        <Style x:Key="HmiSlider" TargetType="Slider">
+            <Setter Property="Height" Value="28"/>
+        </Style>
+
+        <!-- TabItem style for industrial look -->
+        <Style x:Key="HmiTabItemStyle" TargetType="TabItem">
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="16,8"/>
+            <Setter Property="MinHeight" Value="44"/>
+            <Setter Property="Background" Value="#2B2B2D"/>
+            <Setter Property="Foreground" Value="#CCCCCC"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#353538"/>
+                    <Setter Property="Foreground" Value="#FFFFFF"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource AccentColor}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ListBoxItem style: ensure selection/hover contrast for lists such as system log or camera list -->
+        <Style TargetType="ListBoxItem" x:Key="HmiListBoxItemStyle">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#3E3E42"/>
+                    <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+                </Trigger>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{StaticResource AccentColor}"/>
+                    <Setter Property="Foreground" Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- System log list style -->
+        <Style x:Key="SystemLogListStyle" TargetType="ListBox">
+            <Setter Property="FontFamily" Value="Consolas"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Background" Value="#1B1B1B"/>
+            <Setter Property="Foreground" Value="{StaticResource SecondaryText}"/>
+            <Setter Property="BorderThickness" Value="0"/>
+            <Setter Property="ItemContainerStyle" Value="{StaticResource HmiListBoxItemStyle}"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="320" />
+        </Grid.ColumnDefinitions>
+
+        <!-- LEFT: Working area (Tab navigation + content). TabControl spans both rows so the header remains small at top -->
+        <Grid Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+            <TabControl Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" BorderThickness="0" Margin="0,0,12,0">
+                <TabControl.Resources>
+                    <Style TargetType="TabItem" BasedOn="{StaticResource HmiTabItemStyle}"/>
+                    <Style TargetType="TabPanel">
+                        <Setter Property="Margin" Value="0,0,0,12"/>
+                    </Style>
+                </TabControl.Resources>
+                <!-- CAMERA TAB -->
+                <TabItem Header="Camera" Foreground="Black">
+                    <Grid Margin="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <!-- Page title inside content -->
+                        <TextBlock Grid.Row="0" Text="Camera" Foreground="{StaticResource PrimaryText}" FontWeight="Bold" FontSize="20" Margin="0,0,0,12"/>
+
+                        <!-- Main camera layout: left controls, right camera view -->
+                        <Grid Grid.Row="1">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="220" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- LEFT PANEL: controls -->
+                            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,12,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <TextBlock Text="Camera List" Style="{StaticResource CardTitleStyle}"/>
+                                    <StackPanel Grid.Row="1">
+                                        <TextBlock Text="Select camera" Style="{StaticResource LabelStyle}"/>
+                                        <ComboBox x:Name="CameraListCombo" Margin="0,4,0,8" ItemsSource="{Binding AvailableCameras}" SelectedIndex="0"/>
+                                        <Button Content="Refresh" Style="{StaticResource NeutralButton}" Command="{Binding RefreshCommand}"/>
+                                    </StackPanel>
+
+                                    <StackPanel Grid.Row="2" Margin="0,12,0,0">
+                                        <TextBlock Text="Camera Controls" Style="{StaticResource CardTitleStyle}"/>
+                                        <StackPanel Orientation="Vertical" VerticalAlignment="Top">
+                                            <Button Content="Start Camera" Margin="0,4,0,0" Command="{Binding ConnectCommand}" Style="{StaticResource PrimaryButton}"/>
+                                            <Button Content="Stop Camera" Margin="0,8,0,0" Command="{Binding DisconnectCommand}" Style="{StaticResource DangerButton}"/>
+                                            <Button Content="Capture Image" Margin="0,8,0,0" Command="{Binding CaptureCommand}" Style="{StaticResource SuccessButton}"/>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Grid>
+                            </Border>
+
+                            <!-- RIGHT PANEL: CameraView stretches to fill available space -->
+                            <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <!-- embedded title to align with card style -->
+                                    <TextBlock Grid.Row="0" Text="Live Camera Feed" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource SecondaryText}" Margin="12"/>
+
+                                    <controls:CameraView Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
+                                </Grid>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <!-- CONVEYOR TAB -->
+                <TabItem Header="Conveyor">
+                    <Grid Margin="12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                        <!-- Large placeholder for simulation -->
+                        <Border Grid.Row="0" Style="{StaticResource CardStyle}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                            <Grid>
+                                <TextBlock Text="Conveyor Simulation" Foreground="{StaticResource SecondaryText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18"/>
+                            </Grid>
+                        </Border>
+
+                        <!-- Controls below simulation -->
+                        <Grid Grid.Row="1" Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Card 1: Conveyor Speed -->
+                            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,12,0">
+                                <StackPanel>
+                                    <TextBlock Text="Conveyor Speed" Style="{StaticResource CardTitleStyle}"/>
+                                    <TextBlock Text="Speed" Style="{StaticResource LabelStyle}"/>
+                                    <Slider x:Name="ConveyorSpeedSlider" Minimum="0" Maximum="100" Value="50" Style="{StaticResource HmiSlider}"/>
+                                    <TextBlock Text="Current speed:" Style="{StaticResource LabelStyle}" Margin="0,8,0,0"/>
+                                    <TextBlock Text="{Binding ElementName=ConveyorSpeedSlider, Path=Value, StringFormat={}{0:N0}}" Style="{StaticResource ValueStyle}"/>
+                                </StackPanel>
+                            </Border>
+
+                            <!-- Card 2: Buttons -->
+                            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
+                                <StackPanel Orientation="Horizontal">
+                                    <Button Content="Run" Style="{StaticResource SuccessButton}" Width="100" Margin="0,0,8,0"/>
+                                    <Button Content="Stop" Style="{StaticResource DangerButton}" Width="100" Margin="0,0,8,0"/>
+                                    <Button Content="Servo" Style="{StaticResource NeutralButton}" Width="100"/>
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+            </TabControl>
+        </Grid>
+
+        <!-- RIGHT: Fixed system panel -->
+        <Grid Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+            <!-- Project Information -->
+            <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Project Information" Style="{StaticResource CardTitleStyle}"/>
+                    <TextBlock Text="Student Code" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock x:Name="StudentCodeBlock" Text="HE161567" Style="{StaticResource ValueStyle}" Margin="0,0,0,8"/>
+                    <TextBlock Text="Full Name" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock x:Name="FullNameBlock" Text="Le Ngoc Minh" Style="{StaticResource ValueStyle}"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Settings -->
+            <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+                <StackPanel>
+                    <TextBlock Text="Settings" Style="{StaticResource CardTitleStyle}"/>
+                    <TextBlock Text="Camera COM" Style="{StaticResource LabelStyle}"/>
+                    <ComboBox x:Name="CameraComCombo" HorizontalAlignment="Stretch" Margin="0,4,0,8"/>
+                    <TextBlock Text="Camera Baudrate" Style="{StaticResource LabelStyle}"/>
+                    <ComboBox x:Name="CameraBaudCombo" HorizontalAlignment="Stretch" Margin="0,4,0,8"/>
+                    <TextBlock Text="Arduino COM" Style="{StaticResource LabelStyle}"/>
+                    <ComboBox x:Name="ArduinoComCombo" HorizontalAlignment="Stretch" Margin="0,4,0,8"/>
+                    <TextBlock Text="Arduino Baudrate" Style="{StaticResource LabelStyle}"/>
+                    <ComboBox x:Name="ArduinoBaudCombo" HorizontalAlignment="Stretch" Margin="0,4,0,0"/>
+                </StackPanel>
+            </Border>
+
+            <!-- System Log -->
+            <Border Grid.Row="2" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <TextBlock Text="System Log" Style="{StaticResource CardTitleStyle}"/>
+                    <ListBox x:Name="SystemLogList" Margin="0,28,0,0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Style="{StaticResource SystemLogListStyle}"/>
+                </Grid>
+            </Border>
+
+            <!-- Model Control -->
+            <Border Grid.Row="3" Style="{StaticResource CardStyle}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="*"/>
+                    </Grid.ColumnDefinitions>
+                    <Button Grid.Column="0" x:Name="ExecuteModelButton" Content="Execute Model" Margin="0,0,8,0" HorizontalAlignment="Stretch" Style="{StaticResource PrimaryButton}" />
+                    <Button Grid.Column="1" x:Name="StopModelButton" Content="Stop Model" HorizontalAlignment="Stretch" Style="{StaticResource DangerButton}" />
+                </Grid>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>

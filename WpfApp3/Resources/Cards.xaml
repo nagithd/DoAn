@@ -1,0 +1,52 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ========== CARD STYLES ========== -->
+
+    <!-- Card Container Style -->
+    <Style x:Key="CardContainerStyle" TargetType="Border">
+        <Setter Property="Background" Value="#2D2D30"/>
+        <Setter Property="CornerRadius" Value="8"/>
+        <Setter Property="BorderBrush" Value="#3E3E42"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="16"/>
+        <Setter Property="Margin" Value="8"/>
+    </Style>
+
+    <!-- Card Header Style -->
+    <Style x:Key="CardHeaderStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="#FFFFFF"/>
+        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Margin" Value="0,0,0,12"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+    </Style>
+
+    <!-- Card Content Style -->
+    <Style x:Key="CardContentStyle" TargetType="StackPanel">
+        <Setter Property="Background" Value="#252526"/>
+        <Setter Property="Margin" Value="0"/>
+    </Style>
+
+    <!-- Stat Card Style -->
+    <Style x:Key="StatCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="#2D2D30"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="BorderBrush" Value="#3E3E42"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="Padding" Value="12"/>
+        <Setter Property="Margin" Value="8"/>
+        <Setter Property="MinWidth" Value="120"/>
+    </Style>
+
+    <!-- Status Card Style -->
+    <Style x:Key="StatusCardStyle" TargetType="Border">
+        <Setter Property="Background" Value="#2D2D30"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="12"/>
+        <Setter Property="Margin" Value="8,0,0,0"/>
+        <Setter Property="BorderBrush" Value="#3E3E42"/>
+        <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+
+</ResourceDictionary>

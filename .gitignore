@@ -1,0 +1,83 @@
+# =========================
+# Build Output
+# =========================
+bin/
+obj/
+publish/
+Publish/
+artifacts/
+
+# Release / Debug folders
+**/bin/
+**/obj/
+**/Debug/
+**/Release/
+
+# =========================
+# Visual Studio
+# =========================
+.vs/
+*.user
+*.suo
+*.userprefs
+*.userosscache
+*.sln.docstates
+
+# =========================
+# VS Code
+# =========================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/tasks.json
+!.vscode/launch.json
+
+# =========================
+# Rider
+# =========================
+.idea/
+
+# =========================
+# NuGet
+# =========================
+packages/
+*.nupkg
+
+# =========================
+# Logs
+# =========================
+*.log
+
+# =========================
+# Temp files
+# =========================
+*.tmp
+*.temp
+*.cache
+
+# =========================
+# Windows
+# =========================
+Thumbs.db
+Desktop.ini
+
+# =========================
+# macOS
+# =========================
+.DS_Store
+
+# =========================
+# Generated publish files
+# =========================
+*.pdb
+*.ilk
+*.ipdb
+*.iobj
+
+# =========================
+# Camera output (if exists)
+# =========================
+CapturedImages/
+Snapshots/
+Output/
+TempImages/

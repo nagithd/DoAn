@@ -1,0 +1,46 @@
+<UserControl x:Class="WpfApp3.Controls.ConveyorAnimation"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Background="#2D2D30" CornerRadius="8">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <TextBlock Grid.Row="0"
+                       Text="Conveyor System"
+                       Foreground="{StaticResource SecondaryText}"
+                       FontSize="14"
+                       FontWeight="Bold"
+                       Padding="15,12,15,8"
+                       Background="#1E1E1E"/>
+
+            <!-- Conveyor Visualization -->
+            <Grid Grid.Row="1" Background="#252526">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="0,20,0,20">
+                    <!-- Conveyor Belt Visualization -->
+                    <StackPanel Margin="0,0,0,10">
+                        <!-- Top Roller -->
+                        <Border BorderBrush="#4EC9B0" BorderThickness="2" CornerRadius="50" Width="120" Height="20" HorizontalAlignment="Center" Margin="0,0,0,10">
+                            <TextBlock Text="●●●●●" Foreground="#4EC9B0" TextAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                        </Border>
+
+                        <!-- Belt Area -->
+                        <Rectangle Fill="#3E3E42" Height="40" Width="140" Margin="0,10,0,10"/>
+
+                        <!-- Bottom Roller -->
+                        <Border BorderBrush="#4EC9B0" BorderThickness="2" CornerRadius="50" Width="120" Height="20" HorizontalAlignment="Center" Margin="0,10,0,0">
+                            <TextBlock Text="●●●●●" Foreground="#4EC9B0" TextAlignment="Center" VerticalAlignment="Center" FontSize="14"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Status -->
+                    <TextBlock Text="Speed: 45 units/min" Foreground="#CCCCCC" TextAlignment="Center" FontSize="12" Margin="0,5,0,0"/>
+                    <TextBlock Text="Efficiency: 94%" Foreground="#4EC9B0" TextAlignment="Center" FontSize="12" Margin="0,5,0,0"/>
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
