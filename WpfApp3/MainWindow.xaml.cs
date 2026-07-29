@@ -8,6 +8,7 @@ using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Navigation;
 using System.Windows.Shapes;
+using WpfApp3.Dialogs;
 using WpfApp3.ViewModels;
 
 namespace WpfApp3
@@ -25,7 +26,21 @@ namespace WpfApp3
             this.DataContext = camVm;
             // Pre-populate camera list
             camVm.RefreshCommand.Execute(null);
+
+            // Wire up ExecuteModelButton click handler
+            ExecuteModelButton.Click += ExecuteModelButton_Click;
         }
+
+        /// <summary>
+        /// Handle Execute Model button click - opens AI Detection Result dialog
+        /// </summary>
+        private void ExecuteModelButton_Click(object sender, RoutedEventArgs e)
+        {
+            var dialog = new AIDetectionResultDialog();
+            dialog.Owner = this;
+            dialog.ShowDialog();
+        }
+
         // Note: Sidebar and Dashboard were removed; legacy navigation handler intentionally left out.
     }
 }

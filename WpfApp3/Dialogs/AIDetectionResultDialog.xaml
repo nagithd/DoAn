@@ -1,0 +1,235 @@
+<Window x:Class="WpfApp3.Dialogs.AIDetectionResultDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Inspection Result"
+        Width="900"
+        Height="650"
+        WindowStartupLocation="CenterOwner"
+        Background="#1E1E1E"
+        Foreground="#CCCCCC">
+
+    <Window.Resources>
+        <!-- Color Palette -->
+        <SolidColorBrush x:Key="WindowBackground" Color="#1E1E1E"/>
+        <SolidColorBrush x:Key="CardBackground" Color="#252526"/>
+        <SolidColorBrush x:Key="BorderBrushColor" Color="#3E3E42"/>
+        <SolidColorBrush x:Key="AccentColor" Color="#007ACC"/>
+        <SolidColorBrush x:Key="SuccessColor" Color="#4EC9B0"/>
+        <SolidColorBrush x:Key="WarningColor" Color="#FFD166"/>
+        <SolidColorBrush x:Key="DangerColor" Color="#F14C4C"/>
+        <SolidColorBrush x:Key="PrimaryText" Color="#FFFFFF"/>
+        <SolidColorBrush x:Key="SecondaryText" Color="#CCCCCC"/>
+        <SolidColorBrush x:Key="HintText" Color="#858585"/>
+
+        <!-- Base button template -->
+        <Style x:Key="BaseButton" TargetType="Button">
+            <Setter Property="Height" Value="40"/>
+            <Setter Property="MinWidth" Value="80"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="Padding" Value="12,6"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" CornerRadius="5" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.9"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.5"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="PrimaryButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="{StaticResource AccentColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource AccentColor}"/>
+        </Style>
+
+        <Style x:Key="NeutralButton" TargetType="Button" BasedOn="{StaticResource BaseButton}">
+            <Setter Property="Background" Value="#3A3A3D"/>
+            <Setter Property="BorderBrush" Value="#3A3A3D"/>
+        </Style>
+
+        <!-- Card style -->
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="CornerRadius" Value="6"/>
+        </Style>
+
+        <!-- Table styles -->
+        <Style x:Key="TableHeaderCell" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="{StaticResource SecondaryText}"/>
+            <Setter Property="Padding" Value="8,6"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="TableCell" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" MinHeight="350"/>
+            <!-- Top section approximately 65% -->
+            <RowDefinition Height="0.6*" MinHeight="220"/>
+            <!-- Bottom section approximately 35% -->
+        </Grid.RowDefinitions>
+
+        <!-- TOP SECTION: Image Area with Bounding Boxes (65%) -->
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}" Padding="12" Margin="0,0,0,8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- Canvas for image and bounding boxes -->
+                <Canvas Grid.Row="0" Grid.RowSpan="2" x:Name="ImageCanvas" Background="#1B1B1B">
+                    <!-- Image -->
+                    <Image x:Name="InspectionImage" 
+                           Source="{Binding InspectionImage}"
+                           Stretch="UniformToFill"
+                           Canvas.Left="0" Canvas.Top="0"
+                           Width="500" Height="300"/>
+                    <!-- Bounding Boxes will be drawn here via code-behind -->
+                </Canvas>
+            </Grid>
+        </Border>
+
+        <!-- BOTTOM SECTION: Table and Status (35%) -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <!-- Left ~75% -->
+                <ColumnDefinition Width="0.35*"/>
+                <!-- Right ~25% -->
+            </Grid.ColumnDefinitions>
+
+            <!-- LEFT: Component Inspection Table -->
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Padding="12" Margin="0,0,8,0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <!-- Scrollable Table -->
+                    <ScrollViewer Grid.Row="0" Grid.RowSpan="2" VerticalScrollBarVisibility="Auto">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" MinWidth="100"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="60"/>
+                                <ColumnDefinition Width="60"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Header Row -->
+                            <TextBlock Grid.Row="0" Grid.Column="0" Text="Component" Style="{StaticResource TableHeaderCell}" TextAlignment="Left" Padding="4,6"/>
+                            <TextBlock Grid.Row="0" Grid.Column="1" Text="Qty" Style="{StaticResource TableHeaderCell}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="2" Text="Miss" Style="{StaticResource TableHeaderCell}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="3" Text="Bad" Style="{StaticResource TableHeaderCell}"/>
+                            <TextBlock Grid.Row="0" Grid.Column="4" Text="Good" Style="{StaticResource TableHeaderCell}"/>
+
+                            <!-- Data Rows via ItemsControl -->
+                            <ItemsControl Grid.Row="1" Grid.RowSpan="4" Grid.Column="0" Grid.ColumnSpan="5" 
+                                         ItemsSource="{Binding Components}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Vertical"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid Margin="0,2,0,2" Background="#1A1A1A">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" MinWidth="100"/>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="60"/>
+                                                <ColumnDefinition Width="60"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding ComponentName}" Style="{StaticResource TableCell}" TextAlignment="Left" Padding="4,4"/>
+                                            <TextBlock Grid.Column="1" Text="{Binding Quantity}" Style="{StaticResource TableCell}"/>
+                                            <TextBlock Grid.Column="2" Text="{Binding MissQuantity}" Style="{StaticResource TableCell}"/>
+                                            <TextBlock Grid.Column="3" Text="{Binding BadQuantity}" Style="{StaticResource TableCell}"/>
+                                            <TextBlock Grid.Column="4" Text="{Binding GoodQuantity}" Style="{StaticResource TableCell}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </Grid>
+                    </ScrollViewer>
+                </Grid>
+            </Border>
+
+            <!-- RIGHT: Result Panel -->
+            <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="12" Margin="0,0,0,0">
+                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+                    <!-- Title -->
+                    <TextBlock Text="Result" FontSize="13" FontWeight="SemiBold" 
+                               Foreground="{StaticResource SecondaryText}" TextAlignment="Center" Margin="0,0,0,12"/>
+
+                    <!-- Score Display -->
+                    <TextBlock Text="{Binding Score, StringFormat={}{0:P0}}" 
+                              FontSize="28" FontWeight="Bold" 
+                              Foreground="{StaticResource PrimaryText}" 
+                              TextAlignment="Center" Margin="0,0,0,12"/>
+
+                    <!-- Status Indicator Circle -->
+                    <Ellipse x:Name="StatusIndicator" 
+                            Width="70" Height="70" 
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            Margin="0,0,0,12"/>
+
+                    <!-- Legend -->
+                    <StackPanel>
+                        <!-- MISS Box -->
+                        <Border x:Name="LegendMiss" Background="#3A3A3D" Padding="6" CornerRadius="3" Margin="0,0,0,6">
+                            <TextBlock Text="MISS" FontSize="10" Foreground="#F14C4C" 
+                                      FontWeight="SemiBold" TextAlignment="Center"/>
+                        </Border>
+
+                        <!-- BAD Box -->
+                        <Border x:Name="LegendBad" Background="#3A3A3D" Padding="6" CornerRadius="3" Margin="0,0,0,6">
+                            <TextBlock Text="BAD" FontSize="10" Foreground="#FFD166" 
+                                      FontWeight="SemiBold" TextAlignment="Center"/>
+                        </Border>
+
+                        <!-- GOOD Box -->
+                        <Border x:Name="LegendGood" Background="#3A3A3D" Padding="6" CornerRadius="3">
+                            <TextBlock Text="GOOD" FontSize="10" Foreground="#4EC9B0" 
+                                      FontWeight="SemiBold" TextAlignment="Center"/>
+                        </Border>
+                    </StackPanel>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
