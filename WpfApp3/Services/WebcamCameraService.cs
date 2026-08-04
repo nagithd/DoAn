@@ -15,7 +15,7 @@ namespace WpfApp3.Services
     /// Captures frames from laptop/USB camera and converts them to WPF BitmapImage.
     /// Runs frame capture on a background thread to avoid blocking the UI.
     /// </summary>
-    public class WebcamCameraService : IWebcamCameraService
+    public class WebcamCameraService : ICameraService
     {
         private VideoCapture? _capture;
         private Thread? _captureThread;
@@ -23,12 +23,17 @@ namespace WpfApp3.Services
         private bool _shouldStop;
         private BitmapImage? _currentFrame;
         private Mat? _currentMat;
+        private long _frameSequence;
         private readonly object _frameLock = new object();
         private int _selectedCameraIndex;
         private readonly int _targetFps;
         private string _captureFolder;
 
         public bool IsRunning => _isRunning;
+        public int FrameWidth { get; private set; }
+        public int FrameHeight { get; private set; }
+        public double FramesPerSecond { get; private set; }
+        public long FrameSequence => Interlocked.Read(ref _frameSequence);
 
         /// <summary>
         /// Creates a new instance of WebcamCameraService.
@@ -93,12 +98,13 @@ namespace WpfApp3.Services
         /// <summary>
         /// Starts the specified camera and begins frame capture on a background thread.
         /// </summary>
-        public void StartCamera(int cameraIndex = 0)
+        public bool StartCamera(CameraDevice camera)
         {
             if (_isRunning)
-                return;
+                return true;
 
-            _selectedCameraIndex = cameraIndex;
+            ArgumentNullException.ThrowIfNull(camera);
+            _selectedCameraIndex = camera.Index;
 
             try
             {
@@ -109,8 +115,17 @@ namespace WpfApp3.Services
                     _capture?.Dispose();
                     _capture = null;
                     Debug.WriteLine("Failed to open camera");
-                    return;
+                    return false;
                 }
+
+                FrameWidth = (int)Math.Round(
+                    _capture.Get(VideoCaptureProperties.FrameWidth));
+                FrameHeight = (int)Math.Round(
+                    _capture.Get(VideoCaptureProperties.FrameHeight));
+                FramesPerSecond = _capture.Get(
+                    VideoCaptureProperties.Fps);
+                if (FramesPerSecond <= 0)
+                    FramesPerSecond = _targetFps;
 
                 _shouldStop = false;
                 _isRunning = true;
@@ -124,6 +139,7 @@ namespace WpfApp3.Services
                 _captureThread.Start();
 
                 Debug.WriteLine($"Camera {_selectedCameraIndex} started successfully");
+                return true;
             }
             catch (Exception ex)
             {
@@ -131,6 +147,7 @@ namespace WpfApp3.Services
                 _isRunning = false;
                 _capture?.Dispose();
                 _capture = null;
+                return false;
             }
         }
 
@@ -248,11 +265,15 @@ namespace WpfApp3.Services
                         continue;
                     }
 
+                    FrameWidth = frame.Cols;
+                    FrameHeight = frame.Rows;
+
                     // Store the frame (in BGR format from OpenCV)
                     lock (_frameLock)
                     {
                         _currentMat?.Dispose();
                         _currentMat = frame.Clone();
+                        Interlocked.Increment(ref _frameSequence);
                     }
 
                     // Maintain target frame rate

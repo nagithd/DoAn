@@ -5,6 +5,8 @@
         Title="Battery Inspection System - Industrial HMI"
         Background="#1E1E1E"
         WindowState="Maximized"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
         Height="900" Width="1400">
 
     <!-- Simplified MainWindow: two main areas only -->
@@ -121,8 +123,8 @@
             </Style.Triggers>
         </Style>
 
-        <!-- ListBoxItem style: ensure selection/hover contrast for lists such as system log or camera list -->
-        <Style TargetType="ListBoxItem" x:Key="HmiListBoxItemStyle">
+        <Style TargetType="ListBoxItem"
+               x:Key="HmiListBoxItemStyle">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
             <Setter Property="Padding" Value="6,4"/>
@@ -130,7 +132,6 @@
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="#3E3E42"/>
-                    <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
                 </Trigger>
                 <Trigger Property="IsSelected" Value="True">
                     <Setter Property="Background" Value="{StaticResource AccentColor}"/>
@@ -139,39 +140,70 @@
             </Style.Triggers>
         </Style>
 
-        <!-- System log list style -->
-        <Style x:Key="SystemLogListStyle" TargetType="ListBox">
+        <Style x:Key="SystemLogListStyle"
+               TargetType="ListBox">
             <Setter Property="FontFamily" Value="Consolas"/>
-            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontSize" Value="11"/>
             <Setter Property="Background" Value="#1B1B1B"/>
             <Setter Property="Foreground" Value="{StaticResource SecondaryText}"/>
             <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="ItemContainerStyle" Value="{StaticResource HmiListBoxItemStyle}"/>
+            <Setter Property="ItemContainerStyle"
+                    Value="{StaticResource HmiListBoxItemStyle}"/>
+            <Setter Property="ScrollViewer.HorizontalScrollBarVisibility"
+                    Value="Auto"/>
         </Style>
+
+        <Style x:Key="WorkflowStatusStyle"
+               TargetType="TextBlock"
+               BasedOn="{StaticResource ValueStyle}">
+            <Setter Property="Foreground" Value="{StaticResource HintText}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Style.Triggers>
+                <Trigger Property="Text" Value="Connected">
+                    <Setter Property="Foreground" Value="{StaticResource SuccessColor}"/>
+                </Trigger>
+                <Trigger Property="Text" Value="Connecting...">
+                    <Setter Property="Foreground" Value="{StaticResource WarningColor}"/>
+                </Trigger>
+                <Trigger Property="Text" Value="Disconnected">
+                    <Setter Property="Foreground" Value="{StaticResource DangerColor}"/>
+                </Trigger>
+                <Trigger Property="Text" Value="Error">
+                    <Setter Property="Foreground" Value="{StaticResource DangerColor}"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
     </Window.Resources>
 
-    <Grid Margin="16">
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="*"/>
-            <ColumnDefinition Width="320" />
-        </Grid.ColumnDefinitions>
-
-        <!-- LEFT: Working area (Tab navigation + content). TabControl spans both rows so the header remains small at top -->
-        <Grid Grid.Column="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+    <!--
+    The viewport keeps the HMI usable on displays with a lower effective
+    resolution (including Windows display scaling at 125-150%).  The child
+    grid is scaled in MainWindow.xaml.cs while retaining a larger logical
+    workspace for the camera and DOFBOT side-by-side layouts.
+    -->
+    <Grid x:Name="LayoutViewport"
+          Margin="12"
+          ClipToBounds="True">
+        <!-- Main working area. Secondary architecture/log cards were removed
+             so operational controls can use the complete workstation display. -->
+        <Grid x:Name="ScalableLayoutRoot"
+              HorizontalAlignment="Left"
+              VerticalAlignment="Top">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
         </Grid.RowDefinitions>
 
-            <TabControl Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" BorderThickness="0" Margin="0,0,12,0">
+            <TabControl Grid.Row="0" Grid.RowSpan="2" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="Transparent" BorderThickness="0">
                 <TabControl.Resources>
                     <Style TargetType="TabItem" BasedOn="{StaticResource HmiTabItemStyle}"/>
                     <Style TargetType="TabPanel">
                         <Setter Property="Margin" Value="0,0,0,12"/>
                     </Style>
                 </TabControl.Resources>
-                <!-- CAMERA TAB -->
-                <TabItem Header="Camera" Foreground="Black">
+                <!-- WINDOWS AI CAMERA TAB -->
+                <TabItem Header="AI Camera">
                     <Grid Margin="12">
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto"/>
@@ -179,13 +211,23 @@
                         </Grid.RowDefinitions>
 
                         <!-- Page title inside content -->
-                        <TextBlock Grid.Row="0" Text="Camera" Foreground="{StaticResource PrimaryText}" FontWeight="Bold" FontSize="20" Margin="0,0,0,12"/>
+                        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                            <TextBlock Text="IMITECH Camera — Windows AI Input"
+                                       Foreground="{StaticResource PrimaryText}"
+                                       FontWeight="Bold"
+                                       FontSize="20"/>
+                            <TextBlock Text="This camera supplies images to the Windows YOLOv8 model. A centred Capture Zone can save one raw frame per battery; the DOFBOT camera still handles the later robot-cycle trigger."
+                                       Foreground="{StaticResource HintText}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
 
-                        <!-- Main camera layout: left controls, right camera view -->
+                        <!-- Camera controls, live image and camera-tab information -->
                         <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="220" />
                                 <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="320" />
                             </Grid.ColumnDefinitions>
 
                             <!-- LEFT PANEL: controls -->
@@ -197,9 +239,9 @@
                                         <RowDefinition Height="*"/>
                                     </Grid.RowDefinitions>
 
-                                    <TextBlock Text="Camera List" Style="{StaticResource CardTitleStyle}"/>
+                                    <TextBlock Text="Windows Camera" Style="{StaticResource CardTitleStyle}"/>
                                     <StackPanel Grid.Row="1">
-                                        <TextBlock Text="Select camera" Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="MVS GigE / USB device list" Style="{StaticResource LabelStyle}"/>
                                         <ComboBox x:Name="CameraListCombo" Margin="0,4,0,8" ItemsSource="{Binding AvailableCameras}" SelectedItem="{Binding SelectedCameraName}"/>
                                         <Button Content="Refresh" Style="{StaticResource NeutralButton}" Command="{Binding RefreshCommand}"/>
                                     </StackPanel>
@@ -210,13 +252,48 @@
                                             <Button Content="Start Camera" Margin="0,4,0,0" Command="{Binding ConnectCommand}" Style="{StaticResource PrimaryButton}"/>
                                             <Button Content="Stop Camera" Margin="0,8,0,0" Command="{Binding DisconnectCommand}" Style="{StaticResource DangerButton}"/>
                                             <Button Content="Capture Image" Margin="0,8,0,0" Command="{Binding CaptureCommand}" Style="{StaticResource SuccessButton}"/>
+
+                                            <Separator Background="{StaticResource BorderBrushColor}"
+                                                       Margin="0,14,0,10"/>
+                                            <TextBlock Text="AI Capture Zone"
+                                                       Style="{StaticResource CardTitleStyle}"/>
+                                            <CheckBox Content="Show and monitor zone"
+                                                      IsChecked="{Binding IsCaptureZoneEnabled}"
+                                                      Margin="0,2,0,6"/>
+                                            <CheckBox Content="Auto capture on trigger"
+                                                      IsChecked="{Binding IsAutoCaptureEnabled}"
+                                                      Margin="0,0,0,8"/>
+                                            <Button Content="Reset zone background"
+                                                    Command="{Binding ResetCaptureZoneCommand}"
+                                                    Style="{StaticResource NeutralButton}"
+                                                    Margin="0,0,0,8"/>
+                                            <TextBlock Text="{Binding CaptureZoneStatus}"
+                                                       Foreground="{StaticResource WarningColor}"
+                                                       TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding CaptureZoneForegroundPercent, StringFormat={}{0:0.0}% foreground}"
+                                                       Foreground="{StaticResource HintText}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"/>
+                                            <TextBlock Text="Connection status"
+                                                       Style="{StaticResource LabelStyle}"
+                                                       Margin="0,16,0,0"/>
+                                            <TextBlock Text="{Binding CameraStatus}"
+                                                       Style="{StaticResource ValueStyle}"/>
+                                            <TextBlock Text="Close grabbing in MVS before opening the camera here; one application must own the stream."
+                                                       Foreground="{StaticResource HintText}"
+                                                       TextWrapping="Wrap"
+                                                       FontSize="11"
+                                                       Margin="0,10,0,0"/>
                                         </StackPanel>
                                     </StackPanel>
                                 </Grid>
                             </Border>
 
-                            <!-- RIGHT PANEL: CameraView stretches to fill available space -->
-                            <Border Grid.Column="1" Style="{StaticResource CardStyle}" Padding="0">
+                            <!-- CENTER: CameraView stretches to fill available space -->
+                            <Border Grid.Column="1"
+                                    Style="{StaticResource CardStyle}"
+                                    Padding="0"
+                                    Margin="0,0,12,0">
                                 <Grid>
                                     <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto"/>
@@ -224,116 +301,308 @@
                                     </Grid.RowDefinitions>
 
                                     <!-- embedded title to align with card style -->
-                                    <TextBlock Grid.Row="0" Text="Live Camera Feed" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource SecondaryText}" Margin="12"/>
+                                    <TextBlock Grid.Row="0" Text="Live AI Input Feed" FontSize="15" FontWeight="SemiBold" Foreground="{StaticResource SecondaryText}" Margin="12"/>
 
                                     <controls:CameraView Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"/>
                                 </Grid>
                             </Border>
+
+                            <!-- RIGHT: Context information and persistent application log -->
+                            <Grid Grid.Column="2">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+
+                                <Border Grid.Row="0"
+                                        Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="System Architecture"
+                                                   Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="AI input"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="IMITECH → Windows AI"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   Margin="0,0,0,8"/>
+                                        <TextBlock Text="Cycle trigger"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="DOFBOT camera → Jetson"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   Margin="0,0,0,8"/>
+                                        <TextBlock Text="Motion"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="Jetson Robot API → DOFBOT"
+                                                   Style="{StaticResource ValueStyle}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Row="1"
+                                        Style="{StaticResource CardStyle}">
+                                    <StackPanel>
+                                        <TextBlock Text="Integration Readiness"
+                                                   Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Text="Windows AI model"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="Weights validated; live service pending"
+                                                   Foreground="{StaticResource WarningColor}"
+                                                   Margin="0,0,0,8"/>
+                                        <TextBlock Text="Conveyor driver"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="Arduino serial COM control available"
+                                                   Foreground="{StaticResource SuccessColor}"/>
+                                    </StackPanel>
+                                </Border>
+
+                                <Border Grid.Row="2"
+                                        Style="{StaticResource CardStyle}"
+                                        Margin="0">
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="*"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+
+                                        <Grid Grid.Row="0"
+                                              Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="System Log History"
+                                                       Style="{StaticResource CardTitleStyle}"
+                                                       Margin="0"/>
+                                            <Button Grid.Column="1"
+                                                    Content="Clear"
+                                                    Command="{Binding ClearLogCommand}"
+                                                    Style="{StaticResource NeutralButton}"
+                                                    Height="28"
+                                                    MinWidth="56"
+                                                    Padding="8,2"/>
+                                        </Grid>
+
+                                        <ListBox Grid.Row="1"
+                                                 x:Name="SystemLogList"
+                                                 ItemsSource="{Binding SystemLog}"
+                                                 HorizontalAlignment="Stretch"
+                                                 VerticalAlignment="Stretch"
+                                                 Style="{StaticResource SystemLogListStyle}"/>
+
+                                        <TextBlock Grid.Row="2"
+                                                   Text="{Binding SystemLogPath}"
+                                                   ToolTip="{Binding SystemLogPath}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{StaticResource HintText}"
+                                                   FontSize="10"
+                                                   Margin="0,8,0,0"/>
+                                    </Grid>
+                                </Border>
+                            </Grid>
                         </Grid>
                     </Grid>
                 </TabItem>
 
-                <!-- CONVEYOR TAB -->
-                <TabItem Header="Conveyor">
+                <!-- COMBINED DOFBOT WORKSPACE -->
+                <TabItem Header="DOFBOT Control">
                     <Grid Margin="12">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="*" />
-                    <RowDefinition Height="Auto" />
-                </Grid.RowDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                        <!-- Large placeholder for simulation -->
-                        <Border Grid.Row="0" Style="{StaticResource CardStyle}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                            <Grid>
-                                <TextBlock Text="Conveyor Simulation" Foreground="{StaticResource SecondaryText}" HorizontalAlignment="Center" VerticalAlignment="Center" FontSize="18"/>
-                            </Grid>
-                        </Border>
+                        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                            <TextBlock Text="DOFBOT Robot &amp; Camera Control"
+                                       Foreground="{StaticResource PrimaryText}"
+                                       FontWeight="Bold"
+                                       FontSize="20"/>
+                            <TextBlock Text="Monitor the Jetson camera, configure the cycle trigger and adjust all six robot servos from one workspace."
+                                       Foreground="{StaticResource HintText}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
 
-                        <!-- Controls below simulation -->
-                        <Grid Grid.Row="1" Margin="0,12,0,0">
+                        <Grid Grid.Row="1">
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="1.12*"
+                                                  MinWidth="620"/>
+                                <ColumnDefinition Width="8"/>
+                                <ColumnDefinition Width="1*"
+                                                  MinWidth="580"/>
                             </Grid.ColumnDefinitions>
 
-                            <!-- Card 1: Conveyor Speed -->
-                            <Border Grid.Column="0" Style="{StaticResource CardStyle}" Margin="0,0,12,0">
-                                <StackPanel>
-                                    <TextBlock Text="Conveyor Speed" Style="{StaticResource CardTitleStyle}"/>
-                                    <TextBlock Text="Speed" Style="{StaticResource LabelStyle}"/>
-                                    <Slider x:Name="ConveyorSpeedSlider" Minimum="0" Maximum="100" Value="50" Style="{StaticResource HmiSlider}"/>
-                                    <TextBlock Text="Current speed:" Style="{StaticResource LabelStyle}" Margin="0,8,0,0"/>
-                                    <TextBlock Text="{Binding ElementName=ConveyorSpeedSlider, Path=Value, StringFormat={}{0:N0}}" Style="{StaticResource ValueStyle}"/>
-                                </StackPanel>
+                            <controls:VisionTriggerView
+                                x:Name="VisionTriggerControl"
+                                Grid.Column="0"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"/>
+
+                            <GridSplitter Grid.Column="1"
+                                          Width="4"
+                                          Margin="2,0"
+                                          HorizontalAlignment="Center"
+                                          VerticalAlignment="Stretch"
+                                          Background="{StaticResource BorderBrushColor}"
+                                          ResizeBehavior="PreviousAndNext"
+                                          ResizeDirection="Columns"/>
+
+                            <controls:RobotControlView
+                                x:Name="RobotManualControl"
+                                Grid.Column="2"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"/>
+                        </Grid>
+                    </Grid>
+                </TabItem>
+
+                <!-- SYSTEM WORKFLOW / CONVEYOR PREVIEW -->
+                <TabItem Header="Workflow / Conveyor">
+                    <Grid Margin="12">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="360"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel Grid.Row="0" Margin="0,0,0,12">
+                            <TextBlock Text="Battery Inspection Workflow"
+                                       Foreground="{StaticResource PrimaryText}"
+                                       FontWeight="Bold"
+                                       FontSize="20"/>
+                            <TextBlock Text="The workflow reflects the four inspection outcomes. Arduino conveyor commands and capture-zone events are tracked in the current-session System Log."
+                                       Foreground="{StaticResource HintText}"
+                                       TextWrapping="Wrap"
+                                       Margin="0,4,0,0"/>
+                        </StackPanel>
+
+                        <controls:SystemWorkflowDiagram Grid.Row="1"
+                                                        Margin="0,0,0,12"/>
+
+                        <Grid Grid.Row="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="300"/>
+                            </Grid.ColumnDefinitions>
+
+                            <!-- Shared log is the source of truth for the
+                                 workflow timeline shown here. -->
+                            <Border Grid.Column="0"
+                                    Style="{StaticResource CardStyle}"
+                                    Margin="0,0,12,0">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="*"/>
+                                    </Grid.RowDefinitions>
+
+                                    <Grid Grid.Row="0" Margin="0,0,0,8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <StackPanel>
+                                            <TextBlock Text="Live Process Timeline"
+                                                       Style="{StaticResource CardTitleStyle}"
+                                                       Margin="0"/>
+                                            <TextBlock Text="{Binding CurrentWorkflowStage}"
+                                                       Foreground="{StaticResource SuccessColor}"
+                                                       Margin="0,4,0,0"/>
+                                        </StackPanel>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding SystemLogEntryCount, StringFormat={}{0} events}"
+                                                   Style="{StaticResource LabelStyle}"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <ListBox Grid.Row="1"
+                                             x:Name="WorkflowLogList"
+                                             ItemsSource="{Binding SessionSystemLog}"
+                                             Style="{StaticResource SystemLogListStyle}"
+                                             HorizontalAlignment="Stretch"
+                                             VerticalAlignment="Stretch"/>
+                                </Grid>
                             </Border>
 
-                            <!-- Card 2: Buttons -->
-                            <Border Grid.Column="1" Style="{StaticResource CardStyle}">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button Content="Run" Style="{StaticResource SuccessButton}" Width="100" Margin="0,0,8,0"/>
-                                    <Button Content="Stop" Style="{StaticResource DangerButton}" Width="100" Margin="0,0,8,0"/>
-                                    <Button Content="Servo" Style="{StaticResource NeutralButton}" Width="100"/>
-                                </StackPanel>
+                            <!-- Compact context card requested for values that
+                                 help interpret the live process. -->
+                            <Border Grid.Column="1"
+                                    Style="{StaticResource CardStyle}"
+                                    Margin="0">
+                                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                    <StackPanel>
+                                        <TextBlock Text="Process Information"
+                                                   Style="{StaticResource CardTitleStyle}"/>
+
+                                        <TextBlock Text="Latest tracked stage"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding CurrentWorkflowStage}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   Foreground="{StaticResource SuccessColor}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,10"/>
+
+                                        <TextBlock Text="Latest event"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding LatestSystemLogEntry}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,10"/>
+
+                                        <Separator Background="{StaticResource BorderBrushColor}"
+                                                   Margin="0,2,0,10"/>
+
+                                        <TextBlock Text="Next AI routing result"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding DataContext.NextAiResult, ElementName=VisionTriggerControl}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,8"/>
+
+                                        <TextBlock Text="AI queue size"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding DataContext.AiQueueSize, ElementName=VisionTriggerControl}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   Margin="0,0,0,8"/>
+
+                                        <TextBlock Text="Reference belt speed"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding DataContext.BeltSpeedMmS, ElementName=VisionTriggerControl, StringFormat={}{0:0} mm/s}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   Margin="0,0,0,8"/>
+
+                                        <TextBlock Text="Automatic trigger"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding DataContext.AutomaticTriggerActive, ElementName=VisionTriggerControl}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   Margin="0,0,0,8"/>
+
+                                        <TextBlock Text="Robot current step"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding DataContext.CurrentStep, ElementName=RobotManualControl}"
+                                                   Style="{StaticResource ValueStyle}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,8"/>
+
+                                        <Separator Background="{StaticResource BorderBrushColor}"
+                                                   Margin="0,2,0,10"/>
+
+                                        <controls:ConveyorControlView
+                                            x:Name="ConveyorControl"
+                                            Margin="0,0,0,10"/>
+
+                                        <TextBlock Text="Log file"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding SystemLogPath}"
+                                                   Foreground="{StaticResource HintText}"
+                                                   FontSize="10"
+                                                   TextWrapping="Wrap"/>
+                                    </StackPanel>
+                                </ScrollViewer>
                             </Border>
                         </Grid>
                     </Grid>
                 </TabItem>
             </TabControl>
-        </Grid>
-
-        <!-- RIGHT: Fixed system panel -->
-        <Grid Grid.Column="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-        </Grid.RowDefinitions>
-
-            <!-- Project Information -->
-            <Border Grid.Row="0" Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock Text="Project Information" Style="{StaticResource CardTitleStyle}"/>
-                    <TextBlock Text="Student Code" Style="{StaticResource LabelStyle}"/>
-                    <TextBlock x:Name="StudentCodeBlock" Text="HE161567" Style="{StaticResource ValueStyle}" Margin="0,0,0,8"/>
-                    <TextBlock Text="Full Name" Style="{StaticResource LabelStyle}"/>
-                    <TextBlock x:Name="FullNameBlock" Text="Le Ngoc Minh" Style="{StaticResource ValueStyle}"/>
-                </StackPanel>
-            </Border>
-
-            <!-- Settings -->
-            <Border Grid.Row="1" Style="{StaticResource CardStyle}">
-                <StackPanel>
-                    <TextBlock Text="Settings" Style="{StaticResource CardTitleStyle}"/>
-                    <TextBlock Text="Camera COM" Style="{StaticResource LabelStyle}"/>
-                    <ComboBox x:Name="CameraComCombo" HorizontalAlignment="Stretch" Margin="0,4,0,8"/>
-                    <TextBlock Text="Camera Baudrate" Style="{StaticResource LabelStyle}"/>
-                    <ComboBox x:Name="CameraBaudCombo" HorizontalAlignment="Stretch" Margin="0,4,0,8"/>
-                    <TextBlock Text="Arduino COM" Style="{StaticResource LabelStyle}"/>
-                    <ComboBox x:Name="ArduinoComCombo" HorizontalAlignment="Stretch" Margin="0,4,0,8"/>
-                    <TextBlock Text="Arduino Baudrate" Style="{StaticResource LabelStyle}"/>
-                    <ComboBox x:Name="ArduinoBaudCombo" HorizontalAlignment="Stretch" Margin="0,4,0,0"/>
-                </StackPanel>
-            </Border>
-
-            <!-- System Log -->
-            <Border Grid.Row="2" Style="{StaticResource CardStyle}">
-                <Grid>
-                    <TextBlock Text="System Log" Style="{StaticResource CardTitleStyle}"/>
-                    <ListBox x:Name="SystemLogList" Margin="0,28,0,0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Style="{StaticResource SystemLogListStyle}"/>
-                </Grid>
-            </Border>
-
-            <!-- Model Control -->
-            <Border Grid.Row="3" Style="{StaticResource CardStyle}">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="*"/>
-                    </Grid.ColumnDefinitions>
-                    <Button Grid.Column="0" x:Name="ExecuteModelButton" Content="Execute Model" Margin="0,0,8,0" HorizontalAlignment="Stretch" Style="{StaticResource PrimaryButton}" />
-                    <Button Grid.Column="1" x:Name="StopModelButton" Content="Stop Model" HorizontalAlignment="Stretch" Style="{StaticResource DangerButton}" />
-                </Grid>
-            </Border>
         </Grid>
     </Grid>
 </Window>

@@ -1,0 +1,104 @@
+<UserControl x:Class="WpfApp3.Controls.ConveyorControlView"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             HorizontalAlignment="Stretch">
+    <StackPanel>
+        <TextBlock Text="Conveyor Serial Control"
+                   Style="{DynamicResource CardTitleStyle}"/>
+
+        <TextBlock Text="Arduino COM port"
+                   Style="{DynamicResource LabelStyle}"/>
+        <ComboBox ItemsSource="{Binding AvailablePorts}"
+                  SelectedItem="{Binding SelectedPortName}"
+                  Margin="0,4,0,6"/>
+
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0"
+                    Content="Refresh COM"
+                    Command="{Binding RefreshPortsCommand}"
+                    Style="{DynamicResource NeutralButton}"
+                    Margin="0,0,4,0"/>
+            <Button Grid.Column="1"
+                    Content="Connect"
+                    Command="{Binding ConnectCommand}"
+                    Style="{DynamicResource PrimaryButton}"
+                    Margin="4,0,0,0"/>
+        </Grid>
+
+        <Button Content="Disconnect"
+                Command="{Binding DisconnectCommand}"
+                Style="{DynamicResource NeutralButton}"
+                Margin="0,0,0,10"/>
+
+        <TextBlock Text="Connection"
+                   Style="{DynamicResource LabelStyle}"/>
+        <TextBlock Text="{Binding ConnectionStatus}"
+                   Style="{DynamicResource ValueStyle}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,4"/>
+        <TextBlock Text="{Binding BaudRateText}"
+                   Foreground="{DynamicResource HintText}"
+                   FontSize="11"
+                   Margin="0,0,0,10"/>
+
+        <TextBlock Text="Motor commands: 1 = ON, 0 = OFF"
+                   Style="{DynamicResource LabelStyle}"/>
+        <Grid Margin="0,4,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+            <TextBlock Grid.Row="0" Text="START" VerticalAlignment="Center" Margin="0,0,8,5"/>
+            <TextBox Grid.Row="0"
+                     Grid.Column="1"
+                     Text="{Binding StartCommand, Mode=OneWay}"
+                     IsReadOnly="True"
+                     Margin="0,0,0,5"/>
+            <TextBlock Grid.Row="1" Text="STOP" VerticalAlignment="Center" Margin="0,0,8,0"/>
+            <TextBox Grid.Row="1"
+                     Grid.Column="1"
+                     Text="{Binding StopCommand, Mode=OneWay}"
+                     IsReadOnly="True"/>
+        </Grid>
+
+        <Grid Margin="0,0,0,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0"
+                    Content="START MOTOR"
+                    Command="{Binding StartMotorCommand}"
+                    IsEnabled="{Binding IsConnected}"
+                    Style="{DynamicResource SuccessButton}"
+                    Margin="0,0,4,0"/>
+            <Button Grid.Column="1"
+                    Content="STOP MOTOR"
+                    Command="{Binding StopMotorCommand}"
+                    IsEnabled="{Binding IsConnected}"
+                    Style="{DynamicResource DangerButton}"
+                    Margin="4,0,0,0"/>
+        </Grid>
+
+        <TextBlock Text="Motor state"
+                   Style="{DynamicResource LabelStyle}"/>
+        <TextBlock Text="{Binding MotorStatus}"
+                   Foreground="{DynamicResource WarningColor}"
+                   TextWrapping="Wrap"
+                   Margin="0,0,0,8"/>
+
+        <TextBlock Text="Last Arduino response"
+                   Style="{DynamicResource LabelStyle}"/>
+        <TextBlock Text="{Binding LastReceived}"
+                   Foreground="{DynamicResource HintText}"
+                   TextWrapping="Wrap"/>
+    </StackPanel>
+</UserControl>

@@ -1,132 +1,152 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Microsoft.Win32;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Windows.Media.Imaging;
 using WpfApp3.Models;
+using WpfApp3.Services;
 
-namespace WpfApp3.ViewModels
+namespace WpfApp3.ViewModels;
+
+public partial class AIDetectionResultViewModel : ObservableObject
 {
-    /// <summary>
-    /// ViewModel for the AI Detection Result Dialog
-    /// Manages inspection result data and user interactions
-    /// </summary>
-    public partial class AIDetectionResultViewModel : ObservableObject
+    [ObservableProperty]
+    private InspectionResult? inspectionResult;
+
+    [ObservableProperty]
+    private BitmapSource? inspectionImage;
+
+    [ObservableProperty]
+    private ObservableCollection<BoundingBox> boundingBoxes = [];
+
+    [ObservableProperty]
+    private double score;
+
+    [ObservableProperty]
+    private string overallResultStatus = "WAITING";
+
+    [ObservableProperty]
+    private string statusIndicatorColor = "#858585";
+
+    [ObservableProperty]
+    private string modelStatus = "Awaiting Windows AI service result";
+
+    [ObservableProperty]
+    private string detectedClass = "-";
+
+    [ObservableProperty]
+    private string selectedRobotCycle = "-";
+
+    [ObservableProperty]
+    private string inferenceTime = "-";
+
+    [ObservableProperty]
+    private string inspectionTime = "-";
+
+    public AIDetectionResultViewModel()
     {
-        [ObservableProperty]
-        private InspectionResult? inspectionResult;
+        SetWaitingState();
+    }
 
-        [ObservableProperty]
-        private BitmapSource? inspectionImage;
+    public void LoadResult(InspectionResult result)
+    {
+        InspectionResult = result;
+        InspectionImage = result.AnnotatedImage;
+        BoundingBoxes = result.BoundingBoxes;
+        Score = result.Confidence;
+        DetectedClass = string.IsNullOrWhiteSpace(result.DetectedClass)
+            ? "-"
+            : result.DetectedClass;
+        SelectedRobotCycle =
+            string.IsNullOrWhiteSpace(result.RecommendedRobotCycle)
+                ? RoutingActionFor(result.DetectedClass)
+                : result.RecommendedRobotCycle;
+        InferenceTime = $"{result.InferenceTimeMs:0.0} ms";
+        InspectionTime =
+            result.InspectionTime.ToString("yyyy-MM-dd HH:mm:ss");
+        ModelStatus = result.Status == InspectionResultStatus.Error
+            ? result.Error ?? "Inference error"
+            : "Result received from Windows AI";
+        UpdateStatusIndicator(result.Status);
+    }
 
-        [ObservableProperty]
-        private ObservableCollection<ComponentInspection> components = new();
+    public void SetWaitingState()
+    {
+        InspectionResult = null;
+        InspectionImage = null;
+        BoundingBoxes = [];
+        Score = 0;
+        DetectedClass = "-";
+        SelectedRobotCycle = "-";
+        InferenceTime = "-";
+        InspectionTime = "-";
+        ModelStatus = "Awaiting Windows AI service result";
+        UpdateStatusIndicator(InspectionResultStatus.Waiting);
+    }
 
-        [ObservableProperty]
-        private ObservableCollection<BoundingBox> boundingBoxes = new();
-
-        [ObservableProperty]
-        private double score = 0.92;
-
-        [ObservableProperty]
-        private string overallResultStatus = "GOOD";
-
-        [ObservableProperty]
-        private string statusIndicatorColor = "#4EC9B0"; // Green (GOOD)
-
-        public AIDetectionResultViewModel()
+    private void UpdateStatusIndicator(InspectionResultStatus status)
+    {
+        switch (status)
         {
-            // Load sample data by default
-            LoadSampleData();
+            case InspectionResultStatus.Detected:
+                StatusIndicatorColor = "#4EC9B0";
+                OverallResultStatus = "DETECTED";
+                break;
+            case InspectionResultStatus.Rejected:
+                StatusIndicatorColor = "#FFD166";
+                OverallResultStatus = "REJECTED";
+                break;
+            case InspectionResultStatus.Error:
+                StatusIndicatorColor = "#F14C4C";
+                OverallResultStatus = "ERROR";
+                break;
+            default:
+                StatusIndicatorColor = "#858585";
+                OverallResultStatus = "WAITING";
+                break;
+        }
+    }
+
+    private static string RoutingActionFor(string className) =>
+        className.Trim().ToLowerInvariant() switch
+        {
+            "normal" => "PASS - continue to end of conveyor",
+            "dented" => "ROBOT PICK - DENTED bin",
+            "scratched" => "ROBOT PICK - SCRATCHED bin",
+            "swollen" => "ROBOT PICK - SWOLLEN bin",
+            _ => "-"
+        };
+
+    [RelayCommand]
+    private void SaveImage()
+    {
+        if (InspectionImage == null)
+        {
+            SystemLogService.Add(
+                "AI",
+                "No inference image is available to save.");
+            return;
         }
 
-        /// <summary>
-        /// Load sample inspection data for testing
-        /// </summary>
-        public void LoadSampleData()
+        var dialog = new SaveFileDialog
         {
-            var result = InspectionResult.CreateSampleData();
+            Title = "Save AI inspection image",
+            Filter = "PNG image (*.png)|*.png",
+            DefaultExt = ".png",
+            FileName =
+                $"ai_result_{DateTime.Now:yyyy-MM-dd_HH-mm-ss}.png"
+        };
 
-            InspectionResult = result;
-            Components = result.Components;
-            BoundingBoxes = result.BoundingBoxes;
-            Score = result.Score;
+        if (dialog.ShowDialog() != true)
+            return;
 
-            // Set status based on result type
-            UpdateStatusIndicator(result.Result);
-
-            // Load placeholder image
-            LoadPlaceholderImage();
-        }
-
-        /// <summary>
-        /// Update the status indicator and text based on the inspection result
-        /// </summary>
-        private void UpdateStatusIndicator(InspectionResultStatus status)
-        {
-            switch (status)
-            {
-                case InspectionResultStatus.GOOD:
-                    StatusIndicatorColor = "#4EC9B0"; // Green - Good
-                    OverallResultStatus = "GOOD";
-                    break;
-                case InspectionResultStatus.BAD:
-                    StatusIndicatorColor = "#FFD166"; // Yellow - Bad
-                    OverallResultStatus = "BAD";
-                    break;
-                case InspectionResultStatus.MISS:
-                    StatusIndicatorColor = "#F14C4C"; // Red - Miss
-                    OverallResultStatus = "MISS";
-                    break;
-                default:
-                    StatusIndicatorColor = "#4EC9B0";
-                    OverallResultStatus = "GOOD";
-                    break;
-            }
-        }
-
-        /// <summary>
-        /// Load a placeholder image for display
-        /// In real implementation, this would load from the actual camera/model output
-        /// </summary>
-        private void LoadPlaceholderImage()
-        {
-            try
-            {
-                // Create a placeholder bitmap (500x300 light gray)
-                var bitmap = new WriteableBitmap(500, 300, 96, 96, System.Windows.Media.PixelFormats.Bgra32, null);
-
-                // Fill with a light gray color to show the area
-                int[] pixels = new int[500 * 300];
-                for (int i = 0; i < pixels.Length; i++)
-                {
-                    // BGRA format: light gray (200, 200, 200) with full alpha
-                    pixels[i] = (200 << 24) | (200 << 16) | (200 << 8) | 200;
-                }
-
-                bitmap.WritePixels(new System.Windows.Int32Rect(0, 0, 500, 300), pixels, 500 * 4, 0);
-                InspectionImage = bitmap;
-            }
-            catch { }
-        }
-
-        /// <summary>
-        /// Save the inspection image
-        /// TODO: Implement actual file save functionality
-        /// </summary>
-        [RelayCommand]
-        public void SaveImage()
-        {
-            // Placeholder for image save functionality
-            System.Diagnostics.Debug.WriteLine("Save image clicked");
-        }
-
-        /// <summary>
-        /// Close the dialog
-        /// This is called from the dialog code-behind
-        /// </summary>
-        public void CloseDialog()
-        {
-            // Handled by dialog code-behind
-        }
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(InspectionImage));
+        using var stream = File.Create(dialog.FileName);
+        encoder.Save(stream);
+        SystemLogService.Add(
+            "AI",
+            $"Saved inference image: {dialog.FileName}");
     }
 }

@@ -1,0 +1,38 @@
+[Unit]
+Description=DOFBOT Robot API and Vision Trigger
+Wants=network-online.target
+After=network-online.target docker.service
+Requires=docker.service
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=jetson
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=Asia/Ho_Chi_Minh
+Environment=DOFBOT_CONTAINER=kind_pare
+Environment=DOFBOT_API_PATH=/root/robot_api.py
+
+# Make the installation idempotent: start the existing container and stop
+# any manually launched API process before systemd creates the tracked one.
+# docker.service can report active before its API is ready during a cold boot.
+ExecStartPre=/bin/sh -c 'until /usr/bin/docker info >/dev/null 2>&1; do /bin/sleep 2; done'
+ExecStartPre=-/usr/bin/docker start ${DOFBOT_CONTAINER}
+ExecStartPre=-/usr/bin/docker exec ${DOFBOT_CONTAINER} sh -c "pkill -TERM -f '[r]obot_api.py' || true"
+ExecStartPre=/bin/sleep 1
+
+ExecStart=/usr/bin/docker exec -e TZ=${TZ} ${DOFBOT_CONTAINER} python3 -u ${DOFBOT_API_PATH}
+ExecStop=-/usr/bin/docker exec ${DOFBOT_CONTAINER} sh -c "pkill -TERM -f '[r]obot_api.py' || true"
+
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+TimeoutStopSec=30
+KillMode=process
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=dofbot-robot-api
+
+[Install]
+WantedBy=multi-user.target

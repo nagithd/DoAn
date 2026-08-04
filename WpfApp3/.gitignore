@@ -1,0 +1,17 @@
+# .NET / Visual Studio generated files
+bin/
+obj/
+.vs/
+.dotnet-cli/
+*.user
+*.suo
+
+# Optional local publish staging
+artifacts/
+
+# Python-generated cache files
+__pycache__/
+*.py[cod]
+
+# Ultralytics creates this local machine-specific settings file
+Ultralytics/settings.json

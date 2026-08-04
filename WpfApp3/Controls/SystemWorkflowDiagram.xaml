@@ -1,0 +1,312 @@
+<UserControl x:Class="WpfApp3.Controls.SystemWorkflowDiagram"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             HorizontalAlignment="Stretch"
+             VerticalAlignment="Stretch">
+    <UserControl.Resources>
+        <Style x:Key="LaneHeaderStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="DiagramNodeStyle" TargetType="Border">
+            <Setter Property="Background" Value="#2D2D30"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentColor}"/>
+            <Setter Property="BorderThickness" Value="2"/>
+            <Setter Property="CornerRadius" Value="5"/>
+            <Setter Property="Padding" Value="8,5"/>
+        </Style>
+
+        <Style x:Key="PendingNodeStyle"
+               TargetType="Border"
+               BasedOn="{StaticResource DiagramNodeStyle}">
+            <Setter Property="BorderBrush" Value="{DynamicResource WarningColor}"/>
+        </Style>
+
+        <Style x:Key="NodeTitleStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource PrimaryText}"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <Style x:Key="NodeHintStyle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource HintText}"/>
+            <Setter Property="FontSize" Value="10"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+            <Setter Property="Margin" Value="0,2,0,0"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Border Style="{DynamicResource CardStyle}"
+            Padding="0"
+            Margin="0">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="14,10,14,8">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="System Workflow Preview"
+                           Style="{DynamicResource CardTitleStyle}"
+                           Margin="0"/>
+                <TextBlock Grid.Column="1"
+                           Text="Static process definition"
+                           Foreground="{DynamicResource HintText}"
+                           FontSize="11"
+                           VerticalAlignment="Center"/>
+            </Grid>
+
+            <!-- A fixed logical canvas is scaled uniformly so the diagram
+                 keeps its proportions on different workstation displays. -->
+            <Viewbox Grid.Row="1"
+                     Stretch="Uniform"
+                     StretchDirection="Both"
+                     Margin="10,0,10,10">
+                <Canvas Width="1120" Height="430" Background="#1B1B1B">
+                    <!-- Swimlanes -->
+                    <Rectangle Canvas.Left="0" Canvas.Top="0"
+                               Width="280" Height="430" Fill="#202022"/>
+                    <Rectangle Canvas.Left="280" Canvas.Top="0"
+                               Width="280" Height="430" Fill="#242426"/>
+                    <Rectangle Canvas.Left="560" Canvas.Top="0"
+                               Width="280" Height="430" Fill="#202022"/>
+                    <Rectangle Canvas.Left="840" Canvas.Top="0"
+                               Width="280" Height="430" Fill="#242426"/>
+
+                    <Rectangle Canvas.Left="0" Canvas.Top="0"
+                               Width="280" Height="38" Fill="#303035"/>
+                    <Rectangle Canvas.Left="280" Canvas.Top="0"
+                               Width="280" Height="38" Fill="#35353A"/>
+                    <Rectangle Canvas.Left="560" Canvas.Top="0"
+                               Width="280" Height="38" Fill="#303035"/>
+                    <Rectangle Canvas.Left="840" Canvas.Top="0"
+                               Width="280" Height="38" Fill="#35353A"/>
+
+                    <Line X1="280" Y1="0" X2="280" Y2="430"
+                          Stroke="{DynamicResource BorderBrushColor}" StrokeThickness="2"/>
+                    <Line X1="560" Y1="0" X2="560" Y2="430"
+                          Stroke="{DynamicResource BorderBrushColor}" StrokeThickness="2"/>
+                    <Line X1="840" Y1="0" X2="840" Y2="430"
+                          Stroke="{DynamicResource BorderBrushColor}" StrokeThickness="2"/>
+
+                    <TextBlock Canvas.Left="0" Canvas.Top="0" Width="280" Height="38"
+                               Text="Windows Inspection" Style="{StaticResource LaneHeaderStyle}"/>
+                    <TextBlock Canvas.Left="280" Canvas.Top="0" Width="280" Height="38"
+                               Text="Conveyor" Style="{StaticResource LaneHeaderStyle}"/>
+                    <TextBlock Canvas.Left="560" Canvas.Top="0" Width="280" Height="38"
+                               Text="Jetson Vision" Style="{StaticResource LaneHeaderStyle}"/>
+                    <TextBlock Canvas.Left="840" Canvas.Top="0" Width="280" Height="38"
+                               Text="DOFBOT Robot" Style="{StaticResource LaneHeaderStyle}"/>
+
+                    <!-- Connectors are drawn before nodes so they stay behind them. -->
+                    <Line X1="140" Y1="66" X2="140" Y2="82"
+                          Stroke="#B9B9B9" StrokeThickness="2"/>
+                    <Polygon Points="134,78 146,78 140,86" Fill="#B9B9B9"/>
+
+                    <Line X1="140" Y1="132" X2="140" Y2="153"
+                          Stroke="#B9B9B9" StrokeThickness="2"/>
+                    <Polygon Points="134,149 146,149 140,157" Fill="#B9B9B9"/>
+
+                    <Line X1="140" Y1="203" X2="140" Y2="224"
+                          Stroke="#B9B9B9" StrokeThickness="2"/>
+                    <Polygon Points="134,220 146,220 140,228" Fill="#B9B9B9"/>
+
+                    <!-- Cross from the selected cycle into conveyor transport. -->
+                    <Line X1="230" Y1="251" X2="340" Y2="251"
+                          Stroke="#B9B9B9" StrokeThickness="2" StrokeDashArray="5,3"/>
+                    <Polygon Points="334,245 334,257 342,251" Fill="#B9B9B9"/>
+
+                    <!-- Conveyor output enters the Jetson camera lane. -->
+                    <Path Data="M 500,251 L 585,251 L 585,130 L 620,130"
+                          Stroke="#B9B9B9" StrokeThickness="2" Fill="Transparent"
+                          StrokeDashArray="5,3"/>
+                    <Polygon Points="614,124 614,136 622,130" Fill="#B9B9B9"/>
+
+                    <Line X1="700" Y1="157" X2="700" Y2="185"
+                          Stroke="#B9B9B9" StrokeThickness="2"/>
+                    <Polygon Points="694,181 706,181 700,189" Fill="#B9B9B9"/>
+
+                    <!-- No branch loops back to monitoring. -->
+                    <Path Data="M 630,230 L 590,230 L 590,100 L 620,100"
+                          Stroke="{DynamicResource WarningColor}"
+                          StrokeThickness="2" Fill="Transparent" StrokeDashArray="5,3"/>
+                    <Polygon Points="614,94 614,106 622,100"
+                             Fill="{DynamicResource WarningColor}"/>
+                    <TextBlock Canvas.Left="574" Canvas.Top="236"
+                               Text="NO"
+                               Foreground="{DynamicResource WarningColor}"
+                               FontSize="10" FontWeight="Bold"/>
+
+                    <!-- Yes branch advances to timing. -->
+                    <Line X1="700" Y1="275" X2="700" Y2="304"
+                          Stroke="{DynamicResource SuccessColor}" StrokeThickness="2"/>
+                    <Polygon Points="694,300 706,300 700,308"
+                             Fill="{DynamicResource SuccessColor}"/>
+                    <TextBlock Canvas.Left="708" Canvas.Top="282"
+                               Text="YES"
+                               Foreground="{DynamicResource SuccessColor}"
+                               FontSize="10" FontWeight="Bold"/>
+
+                    <!-- Trigger starts the robot cycle. -->
+                    <Line X1="780" Y1="331" X2="900" Y2="331"
+                          Stroke="{DynamicResource SuccessColor}"
+                          StrokeThickness="2" StrokeDashArray="5,3"/>
+                    <Polygon Points="894,325 894,337 902,331"
+                             Fill="{DynamicResource SuccessColor}"/>
+
+                    <Line X1="980" Y1="357" X2="980" Y2="375"
+                          Stroke="#B9B9B9" StrokeThickness="2"/>
+                    <Polygon Points="974,371 986,371 980,379" Fill="#B9B9B9"/>
+
+                    <!-- Windows lane nodes -->
+                    <Ellipse Canvas.Left="130" Canvas.Top="48"
+                             Width="20" Height="20"
+                             Fill="{DynamicResource SuccessColor}"/>
+
+                    <Border Canvas.Left="50" Canvas.Top="84"
+                            Width="180" Height="48"
+                            Style="{StaticResource DiagramNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Capture IMITECH frame"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="MVS on Windows"
+                                       Style="{StaticResource NodeHintStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Canvas.Left="50" Canvas.Top="155"
+                            Width="180" Height="48"
+                            Style="{StaticResource DiagramNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="YOLOv8: classify battery"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="dented / normal / scratched / swollen"
+                                       Style="{StaticResource NodeHintStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Canvas.Left="50" Canvas.Top="226"
+                            Width="180" Height="50"
+                            Style="{StaticResource DiagramNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Enqueue classification (FIFO)"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="One AI result per battery"
+                                       Style="{StaticResource NodeHintStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Conveyor lane -->
+                    <Border Canvas.Left="340" Canvas.Top="226"
+                            Width="160" Height="50"
+                            Style="{StaticResource PendingNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Transport battery"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="Pending motor driver"
+                                       Style="{StaticResource NodeHintStyle}"
+                                       Foreground="{DynamicResource WarningColor}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Jetson vision lane -->
+                    <Border Canvas.Left="620" Canvas.Top="86"
+                            Width="160" Height="72"
+                            Style="{StaticResource DiagramNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Monitor entry zone"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="DOFBOT camera on Jetson"
+                                       Style="{StaticResource NodeHintStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Polygon Points="700,187 770,230 700,275 630,230"
+                             Fill="#29292C"
+                             Stroke="{DynamicResource AccentColor}"
+                             StrokeThickness="2"/>
+                    <TextBlock Canvas.Left="650" Canvas.Top="211"
+                               Width="100" Height="40"
+                               Text="Object inside&#x0a;trigger zone?"
+                               Style="{StaticResource NodeTitleStyle}"
+                               VerticalAlignment="Center"/>
+
+                    <Border Canvas.Left="620" Canvas.Top="307"
+                            Width="160" Height="50"
+                            Style="{StaticResource DiagramNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Calculate delay &amp; trigger"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="Speed + travel distance"
+                                       Style="{StaticResource NodeHintStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <!-- Robot lane -->
+                    <Border Canvas.Left="875" Canvas.Top="68"
+                            Width="210" Height="166"
+                            Background="#29292C"
+                            BorderBrush="{DynamicResource BorderBrushColor}"
+                            BorderThickness="1"
+                            CornerRadius="5"
+                            Padding="10,7">
+                        <StackPanel>
+                            <TextBlock Text="CLASS → ACTION"
+                                       Style="{StaticResource NodeTitleStyle}"
+                                       Margin="0,0,0,6"/>
+                            <TextBlock Text="normal → PASS (no pick)"
+                                       Foreground="{DynamicResource SuccessColor}"
+                                       FontSize="11" Margin="0,2"/>
+                            <TextBlock Text="dented → DENTED bin"
+                                       Foreground="{DynamicResource PrimaryText}"
+                                       FontSize="11" Margin="0,2"/>
+                            <TextBlock Text="scratched → SCRATCHED bin"
+                                       Foreground="{DynamicResource PrimaryText}"
+                                       FontSize="11" Margin="0,2"/>
+                            <TextBlock Text="swollen → SWOLLEN bin"
+                                       Foreground="{DynamicResource PrimaryText}"
+                                       FontSize="11" Margin="0,2"/>
+                            <TextBlock Text="Defect drop poses: calibration pending"
+                                       Foreground="{DynamicResource WarningColor}"
+                                       FontSize="10" TextWrapping="Wrap"
+                                       Margin="0,6,0,0"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Canvas.Left="900" Canvas.Top="306"
+                            Width="160" Height="51"
+                            Style="{StaticResource DiagramNodeStyle}">
+                        <StackPanel>
+                            <TextBlock Text="Route by queued AI class"
+                                       Style="{StaticResource NodeTitleStyle}"/>
+                            <TextBlock Text="PASS or pick + servo 5 angle"
+                                       Style="{StaticResource NodeHintStyle}"/>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Canvas.Left="900" Canvas.Top="378"
+                            Width="160" Height="38"
+                            CornerRadius="19"
+                            Background="#263D38"
+                            BorderBrush="{DynamicResource SuccessColor}"
+                            BorderThickness="2">
+                        <TextBlock Text="Route complete"
+                                   Style="{StaticResource NodeTitleStyle}"
+                                   VerticalAlignment="Center"/>
+                    </Border>
+                </Canvas>
+            </Viewbox>
+        </Grid>
+    </Border>
+</UserControl>

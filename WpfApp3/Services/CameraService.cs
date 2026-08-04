@@ -7,16 +7,15 @@ using WpfApp3.Models;
 namespace WpfApp3.Services
 {
     /// <summary>
-    /// Interface for webcam camera service.
-    /// Abstracts camera hardware communication for laptop/USB cameras.
-    /// Can be replaced with IIndustrialCameraService for GigE cameras.
+    /// Common interface for the active camera backend.
+    /// The production AI camera uses the MVS industrial camera service.
     /// </summary>
-    public interface IWebcamCameraService : IDisposable
+    public interface ICameraService : IDisposable
     {
         /// <summary>
         /// Starts the specified camera and begins frame capture.
         /// </summary>
-        void StartCamera(int cameraIndex = 0);
+        bool StartCamera(CameraDevice camera);
 
         /// <summary>
         /// Stops the camera and halts frame capture.
@@ -46,14 +45,19 @@ namespace WpfApp3.Services
         /// Indicates whether the camera is currently running.
         /// </summary>
         bool IsRunning { get; }
+
+        int FrameWidth { get; }
+
+        int FrameHeight { get; }
+
+        double FramesPerSecond { get; }
+
+        /// <summary>
+        /// Monotonically increasing identifier for frames delivered by the
+        /// camera backend. Consumers use it to avoid analysing the same frame
+        /// more than once when the UI refresh rate is higher than camera FPS.
+        /// </summary>
+        long FrameSequence { get; }
     }
 
-    /// <summary>
-    /// Legacy interface for camera service.
-    /// Kept for backward compatibility.
-    /// </summary>
-    public interface ICameraService
-    {
-        // Placeholder for Camera Service interface
-    }
 }

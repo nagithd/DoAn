@@ -9,7 +9,10 @@ namespace WpfApp3.Models
         public string Name { get; set; } = string.Empty;
         public string DevicePath { get; set; } = string.Empty;
 
-        public CameraDevice(int index, string name, string devicePath = "")
+        public CameraDevice(
+            int index,
+            string name,
+            string devicePath = "")
         {
             Index = index;
             Name = name;

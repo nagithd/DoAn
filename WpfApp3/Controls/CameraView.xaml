@@ -4,44 +4,59 @@
              HorizontalAlignment="Stretch"
              VerticalAlignment="Stretch"
              Background="Transparent">
-    <Border Background="#2D2D30" CornerRadius="6" Padding="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+    <Border Background="#2D2D30"
+            CornerRadius="6"
+            HorizontalAlignment="Stretch"
+            VerticalAlignment="Stretch">
+        <Grid Background="#181818">
+            <TextBlock Text="No live frame from the Windows camera"
+                       Foreground="#858585"
+                       FontSize="15"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"/>
 
-            <!-- Header -->
-            <TextBlock Grid.Row="0"
-                       Text="Live Camera Feed"
-                       Foreground="{StaticResource SecondaryBrush}"
-                       FontSize="14"
-                       FontWeight="Bold"
-                       Padding="12,10"
-                       Background="Transparent"/>
+            <Image x:Name="CameraImage"
+                   Source="{Binding CameraFrame}"
+                   Stretch="Uniform"
+                   HorizontalAlignment="Stretch"
+                   VerticalAlignment="Stretch"
+                   RenderOptions.BitmapScalingMode="HighQuality"/>
 
-            <!-- Camera area: two layered Grid children -->
-            <Grid Grid.Row="1" Background="#252526" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-                <!-- Layer 0: Live camera image / video surface (Stretch=Uniform) -->
-                <Image x:Name="CameraImage"
-                       Source="{Binding CameraFrame}"
-                       Stretch="Uniform"
-                       HorizontalAlignment="Stretch"
-                       VerticalAlignment="Stretch"
-                       RenderOptions.BitmapScalingMode="HighQuality"/>
+            <Border Background="#CC1B1B1B"
+                    CornerRadius="4"
+                    Padding="8,5"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top"
+                    Margin="12"
+                    IsHitTestVisible="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="IMITECH / Windows"
+                               Foreground="#CCCCCC"
+                               FontSize="11"
+                               FontWeight="SemiBold"/>
+                    <TextBlock Text="{Binding CameraStatus, StringFormat= • {0}}"
+                               Foreground="#4EC9B0"
+                               FontSize="11"/>
+                </StackPanel>
+            </Border>
 
-                <!-- Layer 1: overlay controls and status badges -->
-                <Grid HorizontalAlignment="Stretch" VerticalAlignment="Stretch" IsHitTestVisible="False">
-
-                    <!-- bottom-left overlay: feed info -->
-                    <Border Background="#1B1B1B" Opacity="0.7" CornerRadius="4" Padding="8" HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="12" IsHitTestVisible="False">
-                        <StackPanel Orientation="Horizontal">
-                            <TextBlock Text="1920×1080" Foreground="#CCCCCC" FontSize="11"/>
-                            <TextBlock Text="@ 30fps" Foreground="#858585" FontSize="11" Margin="8,0,0,0"/>
-                        </StackPanel>
-                    </Border>
-                </Grid>
-            </Grid>
+            <Border Background="#CC1B1B1B"
+                    CornerRadius="4"
+                    Padding="8,5"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Bottom"
+                    Margin="12"
+                    IsHitTestVisible="False">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{Binding CameraResolution}"
+                               Foreground="#CCCCCC"
+                               FontSize="11"/>
+                    <TextBlock Text="{Binding CameraFrameRate, StringFormat= @ {0:0.#} fps}"
+                               Foreground="#858585"
+                               FontSize="11"
+                               Margin="8,0,0,0"/>
+                </StackPanel>
+            </Border>
         </Grid>
     </Border>
 </UserControl>
