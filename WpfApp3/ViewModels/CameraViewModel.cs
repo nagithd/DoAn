@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Diagnostics;
+using System.IO;
 using OpenCvSharp;
 using System.Windows.Media.Imaging;
 using WpfApp3.Helpers;
@@ -20,19 +21,20 @@ namespace WpfApp3.ViewModels
     public partial class CameraViewModel : ObservableObject, IDisposable
     {
         private readonly ICameraService _cameraService;
+        private readonly AiInferenceClient _aiInferenceClient;
         private System.Windows.Threading.DispatcherTimer? _frameTimer;
-        private BackgroundSubtractorMOG2? _captureZoneBackground;
         private long _lastCaptureZoneFrameSequence = -1;
-        private int _captureZoneWarmupFrames;
         private int _captureZoneStableFrames;
         private int _captureZoneClearFrames;
+        private bool _captureZoneAiRequestInProgress;
+        private DateTime _lastCaptureZoneAiRequestUtc = DateTime.MinValue;
         private bool _autoCaptureInProgress;
         private bool _disposed;
 
-        private const int CaptureZoneWarmupTarget = 150;
-        private const int CaptureZoneStableTarget = 4;
-        private const int CaptureZoneClearTarget = 10;
-        private const double CaptureZoneMinimumContourPercent = 1.5;
+        private const int CaptureZoneStableTarget = 2;
+        private const int CaptureZoneClearTarget = 3;
+        private static readonly TimeSpan CaptureZoneAiInterval =
+            TimeSpan.FromMilliseconds(200);
 
         [ObservableProperty]
         private string cameraStatus = "Disconnected";
@@ -107,7 +109,17 @@ namespace WpfApp3.ViewModels
         private string captureZoneStatus = "Waiting for camera";
 
         [ObservableProperty]
-        private double captureZoneForegroundPercent;
+        private double captureZoneAiConfidence;
+
+        [ObservableProperty]
+        private string aiServiceStatus = "Checking local AI service";
+
+        [ObservableProperty]
+        private string lastAiResult = "No result yet";
+
+        private InspectionResult? _lastInspectionResult;
+
+        public event EventHandler<InspectionResult>? InspectionResultRequested;
 
         public ObservableCollection<string> SystemLog =>
             SystemLogService.Entries;
@@ -134,12 +146,14 @@ namespace WpfApp3.ViewModels
         {
             // Initialize camera service
             _cameraService = new MvsCameraService();
+            _aiInferenceClient = new AiInferenceClient();
 
             SessionSystemLog.CollectionChanged +=
                 SystemLog_CollectionChanged;
 
             // Subscribe to frame updates
             StartFrameRefresh();
+            _ = CheckAiServiceAvailabilityAsync();
         }
 
         private void SystemLog_CollectionChanged(
@@ -409,6 +423,22 @@ namespace WpfApp3.ViewModels
         private void ResetCaptureZone() =>
             ResetCaptureZoneState(logReset: true);
 
+        [RelayCommand]
+        private async Task CheckAiService() =>
+            await CheckAiServiceAvailabilityAsync(logSuccess: true);
+
+        [RelayCommand]
+        private void ShowLastAiResult()
+        {
+            if (_lastInspectionResult == null)
+            {
+                SystemLogService.Add("AI", "No AI inference result is available yet.");
+                return;
+            }
+
+            InspectionResultRequested?.Invoke(this, _lastInspectionResult);
+        }
+
         partial void OnIsCaptureZoneEnabledChanged(bool value)
         {
             if (value)
@@ -418,7 +448,7 @@ namespace WpfApp3.ViewModels
             else
             {
                 CaptureZoneLatched = false;
-                CaptureZoneForegroundPercent = 0;
+                CaptureZoneAiConfidence = 0;
                 CaptureZoneStatus = "Disabled";
                 LogMessage("Capture Zone disabled");
             }
@@ -426,28 +456,22 @@ namespace WpfApp3.ViewModels
 
         private void ResetCaptureZoneState(bool logReset)
         {
-            _captureZoneBackground?.Dispose();
-            _captureZoneBackground =
-                BackgroundSubtractorMOG2.Create(
-                    history: 500,
-                    varThreshold: 20,
-                    detectShadows: false);
             _lastCaptureZoneFrameSequence = -1;
-            _captureZoneWarmupFrames = 0;
             _captureZoneStableFrames = 0;
             _captureZoneClearFrames = 0;
+            _lastCaptureZoneAiRequestUtc = DateTime.MinValue;
             CaptureZoneLatched = false;
-            CaptureZoneForegroundPercent = 0;
+            CaptureZoneAiConfidence = 0;
             CaptureZoneStatus = IsCaptureZoneEnabled
-                ? "Learning empty conveyor background"
+                ? "YOLO armed"
                 : "Disabled";
 
             if (logReset && IsCaptureZoneEnabled)
             {
                 LogMessage(
-                    "Capture Zone reset. Keep the zone empty while the " +
-                    $"first {CaptureZoneWarmupTarget} camera frames establish " +
-                    "the moving conveyor background.");
+                    "Capture Zone reset. YOLO will trigger only after " +
+                    $"detecting a battery in {CaptureZoneStableTarget} " +
+                    "consecutive checks.");
             }
         }
 
@@ -461,7 +485,7 @@ namespace WpfApp3.ViewModels
             if (sequence != _lastCaptureZoneFrameSequence)
             {
                 _lastCaptureZoneFrameSequence = sequence;
-                AnalyseCaptureZone(rawFrame, zone);
+                QueueCaptureZoneAiCheck(rawFrame, zone);
             }
 
             Scalar colour = CaptureZoneLatched
@@ -483,13 +507,18 @@ namespace WpfApp3.ViewModels
                 LineTypes.AntiAlias);
         }
 
-        private void AnalyseCaptureZone(Mat rawFrame, Rect zone)
+        private void QueueCaptureZoneAiCheck(Mat rawFrame, Rect zone)
         {
-            _captureZoneBackground ??=
-                BackgroundSubtractorMOG2.Create(500, 20, false);
+            if (_captureZoneAiRequestInProgress ||
+                _autoCaptureInProgress ||
+                DateTime.UtcNow - _lastCaptureZoneAiRequestUtc <
+                CaptureZoneAiInterval)
+            {
+                return;
+            }
 
             using var roi = new Mat(rawFrame, zone);
-            int analysisWidth = Math.Min(480, roi.Width);
+            int analysisWidth = Math.Min(640, roi.Width);
             int analysisHeight = Math.Max(
                 1,
                 (int)Math.Round(
@@ -498,101 +527,80 @@ namespace WpfApp3.ViewModels
             Cv2.Resize(roi, resized, new OpenCvSharp.Size(
                 analysisWidth,
                 analysisHeight));
-            using var gray = new Mat();
-            Cv2.CvtColor(resized, gray, ColorConversionCodes.BGR2GRAY);
-            Cv2.GaussianBlur(gray, gray, new OpenCvSharp.Size(7, 7), 0);
-            using var foreground = new Mat();
+            Cv2.ImEncode(
+                ".jpg",
+                resized,
+                out byte[] jpeg,
+                new ImageEncodingParam(ImwriteFlags.JpegQuality, 85));
+            _captureZoneAiRequestInProgress = true;
+            _lastCaptureZoneAiRequestUtc = DateTime.UtcNow;
+            _ = AnalyseCaptureZoneWithAiAsync(jpeg);
+        }
 
-            double learningRate =
-                _captureZoneWarmupFrames < CaptureZoneWarmupTarget
-                    ? 0.03
-                    : 0.005;
-            _captureZoneBackground.Apply(gray, foreground, learningRate);
-
-            using Mat kernel = Cv2.GetStructuringElement(
-                MorphShapes.Rect,
-                new OpenCvSharp.Size(5, 5));
-            Cv2.MorphologyEx(
-                foreground,
-                foreground,
-                MorphTypes.Open,
-                kernel);
-            Cv2.MorphologyEx(
-                foreground,
-                foreground,
-                MorphTypes.Close,
-                kernel,
-                iterations: 2);
-
-            if (_captureZoneWarmupFrames < CaptureZoneWarmupTarget)
+        private async Task AnalyseCaptureZoneWithAiAsync(byte[] jpeg)
+        {
+            try
             {
-                _captureZoneWarmupFrames++;
-                CaptureZoneForegroundPercent = 0;
-                CaptureZoneStatus =
-                    $"Learning background {_captureZoneWarmupFrames}/" +
-                    $"{CaptureZoneWarmupTarget}";
-                return;
-            }
+                AiZoneDetectionResponse response =
+                    await _aiInferenceClient.DetectZoneAsync(jpeg);
+                if (_disposed || !IsCaptureZoneEnabled)
+                    return;
 
-            Cv2.FindContours(
-                foreground,
-                out Point[][] contours,
-                out _,
-                RetrievalModes.External,
-                ContourApproximationModes.ApproxSimple);
-            double largestArea = contours.Length == 0
-                ? 0
-                : contours.Max(contour => Cv2.ContourArea(contour));
-            double analysisArea = analysisWidth * analysisHeight;
-            CaptureZoneForegroundPercent =
-                analysisArea > 0
-                    ? largestArea / analysisArea * 100.0
-                    : 0;
-
-            bool objectPresent =
-                CaptureZoneForegroundPercent >=
-                CaptureZoneMinimumContourPercent;
-            if (objectPresent)
-            {
-                _captureZoneStableFrames++;
-                _captureZoneClearFrames = 0;
-                if (!CaptureZoneLatched &&
-                    _captureZoneStableFrames >=
-                    CaptureZoneStableTarget)
+                CaptureZoneAiConfidence = response.Confidence;
+                if (response.BatteryDetected)
                 {
-                    CaptureZoneLatched = true;
-                    CaptureZoneStatus = "Object latched";
-                    LogMessage(
-                        $"Capture Zone trigger latched at " +
-                        $"{CaptureZoneForegroundPercent:0.0}% foreground.");
+                    _captureZoneStableFrames++;
+                    _captureZoneClearFrames = 0;
+                    if (!CaptureZoneLatched &&
+                        _captureZoneStableFrames >=
+                        CaptureZoneStableTarget)
+                    {
+                        CaptureZoneLatched = true;
+                        CaptureZoneStatus = "Battery latched by YOLO";
+                        LogMessage(
+                            $"Capture Zone YOLO trigger latched at " +
+                            $"{response.Confidence:P1} confidence.");
 
-                    if (IsAutoCaptureEnabled)
-                        BeginAutomaticCapture();
-                    else
-                        LogMessage("Auto capture is OFF; preview trigger only.");
+                        if (IsAutoCaptureEnabled)
+                            BeginAutomaticCapture();
+                        else
+                            LogMessage("Auto capture is OFF; preview trigger only.");
+                    }
+                    else if (!CaptureZoneLatched)
+                    {
+                        CaptureZoneStatus =
+                            $"YOLO candidate {_captureZoneStableFrames}/" +
+                            $"{CaptureZoneStableTarget}";
+                    }
                 }
-                else if (!CaptureZoneLatched)
+                else
                 {
-                    CaptureZoneStatus =
-                        $"Candidate {_captureZoneStableFrames}/" +
-                        $"{CaptureZoneStableTarget}";
+                    _captureZoneStableFrames = 0;
+                    _captureZoneClearFrames++;
+                    if (CaptureZoneLatched &&
+                        _captureZoneClearFrames >= CaptureZoneClearTarget)
+                    {
+                        CaptureZoneLatched = false;
+                        CaptureZoneStatus = "YOLO armed";
+                        LogMessage(
+                            "Capture Zone rearmed after YOLO confirmed " +
+                            "that the battery cleared.");
+                    }
+                    else if (!CaptureZoneLatched)
+                    {
+                        CaptureZoneStatus = "YOLO armed";
+                    }
                 }
             }
-            else
+            catch (Exception ex)
             {
-                _captureZoneStableFrames = 0;
-                _captureZoneClearFrames++;
-                if (CaptureZoneLatched &&
-                    _captureZoneClearFrames >= CaptureZoneClearTarget)
-                {
-                    CaptureZoneLatched = false;
-                    CaptureZoneStatus = "Armed";
-                    LogMessage("Capture Zone rearmed after the object cleared.");
-                }
-                else if (!CaptureZoneLatched)
-                {
-                    CaptureZoneStatus = "Armed";
-                }
+                CaptureZoneStatus = "YOLO service unavailable";
+                AiServiceStatus = "Capture Zone AI check failed";
+                Debug.WriteLine($"Capture Zone AI check failed: {ex.Message}");
+            }
+            finally
+            {
+                _captureZoneAiRequestInProgress = false;
             }
         }
 
@@ -619,6 +627,7 @@ namespace WpfApp3.ViewModels
                 LastCaptureTime = DateTime.Now.ToString("s");
                 LogMessage(
                     $"Automatic raw frame captured for AI: {path}");
+                await RunAiInferenceAsync(path);
             }
             catch (Exception ex)
             {
@@ -628,6 +637,118 @@ namespace WpfApp3.ViewModels
             {
                 _autoCaptureInProgress = false;
             }
+        }
+
+        private async Task CheckAiServiceAvailabilityAsync(
+            bool logSuccess = false)
+        {
+            try
+            {
+                AiHealthResponse health =
+                    await _aiInferenceClient.GetHealthAsync();
+                if (_disposed)
+                    return;
+
+                AiServiceStatus = health.Status.Equals(
+                        "ok",
+                        StringComparison.OrdinalIgnoreCase)
+                    ? "Connected — model loaded"
+                    : $"Service status: {health.Status}";
+                if (logSuccess)
+                {
+                    SystemLogService.Add(
+                        "AI",
+                        $"AI service connected. Model: {health.ModelPath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_disposed)
+                    return;
+
+                AiServiceStatus = "Offline — start AI service on port 7100";
+                if (logSuccess)
+                    SystemLogService.Add("AI", $"AI service unavailable: {ex.Message}");
+            }
+        }
+
+        private async Task RunAiInferenceAsync(string imagePath)
+        {
+            AiServiceStatus = "Running inference";
+            try
+            {
+                AiPredictionResponse response =
+                    await _aiInferenceClient.PredictAsync(imagePath);
+                if (_disposed)
+                    return;
+
+                var result = new InspectionResult
+                {
+                    Status = response.Status.ToLowerInvariant() switch
+                    {
+                        "detected" => InspectionResultStatus.Detected,
+                        "rejected" => InspectionResultStatus.Rejected,
+                        _ => InspectionResultStatus.Error
+                    },
+                    DetectedClass = response.DetectedClass,
+                    Confidence = response.Confidence,
+                    RecommendedRobotCycle = response.RecommendedRobotCycle,
+                    InferenceTimeMs = response.InferenceTimeMs,
+                    InspectionTime = response.InspectionTime.ToLocalTime(),
+                    AnnotatedImage = LoadCapturedImage(response.ImagePath),
+                    BoundingBoxes = new ObservableCollection<BoundingBox>(
+                        response.Detections.Select(detection => new BoundingBox
+                        {
+                            ClassName = detection.ClassName,
+                            Confidence = detection.Confidence,
+                            X = detection.X,
+                            Y = detection.Y,
+                            Width = detection.Width,
+                            Height = detection.Height
+                        })),
+                    Error = string.IsNullOrWhiteSpace(response.DetectedClass)
+                        ? "The AI service did not detect a battery."
+                        : null
+                };
+
+                _lastInspectionResult = result;
+                string displayedClass = string.IsNullOrWhiteSpace(
+                        response.DetectedClass)
+                    ? "no battery"
+                    : response.DetectedClass;
+                LastAiResult =
+                    $"{displayedClass} — {response.Confidence:P1} — " +
+                    $"{response.InferenceTimeMs:0.0} ms";
+                AiServiceStatus = "Connected — last inference completed";
+                SystemLogService.Add(
+                    "AI",
+                    $"Capture Zone result: {displayedClass}, " +
+                    $"confidence {response.Confidence:P1}, " +
+                    $"{response.Detections.Count} box(es), " +
+                    $"{response.InferenceTimeMs:0.0} ms.");
+            }
+            catch (Exception ex)
+            {
+                AiServiceStatus = "Inference failed";
+                LastAiResult = "AI error";
+                SystemLogService.Add("AI", $"Inference failed: {ex.Message}");
+            }
+        }
+
+        private static BitmapSource LoadCapturedImage(string imagePath)
+        {
+            using var stream = new FileStream(
+                imagePath,
+                FileMode.Open,
+                FileAccess.Read,
+                FileShare.ReadWrite);
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.StreamSource = stream;
+            image.EndInit();
+            image.Freeze();
+            return image;
         }
 
         private static Rect CreateCaptureZone(int width, int height)
@@ -658,8 +779,7 @@ namespace WpfApp3.ViewModels
                 SystemLog_CollectionChanged;
             _cameraService.StopCamera();
             _cameraService.Dispose();
-            _captureZoneBackground?.Dispose();
-            _captureZoneBackground = null;
+            _aiInferenceClient.Dispose();
             _disposed = true;
             GC.SuppressFinalize(this);
         }

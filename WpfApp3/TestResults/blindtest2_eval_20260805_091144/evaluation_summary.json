@@ -1,0 +1,62 @@
+{
+  "model": "D:\\capstone\\AIService\\runs\\detect\\finetune_battery_v2_20260804_232921\\weights\\best.pt",
+  "source": "C:\\Users\\aidlsloth\\Downloads\\BlindTest2.yolov8",
+  "output": "D:\\capstone\\WPF\\WpfApp3\\TestResults\\blindtest2_eval_20260805_091144",
+  "image_count": 19,
+  "class_order_remapped": {
+    "0": "dented",
+    "1": "battery",
+    "2": "scratched",
+    "3": "swollen"
+  },
+  "semantic_training_overlap_count": 1,
+  "semantic_training_overlap_images": [
+    "capture_2026-07-30_09-23-51-013_bmp.rf.XQadNkVgb7XDvYCOQQeU.bmp"
+  ],
+  "overall": {
+    "precision": 0.7355769230769231,
+    "recall": 0.6144816226085577,
+    "mAP50": 0.5901089743589744,
+    "mAP50_95": 0.40978026826115066
+  },
+  "per_class": {
+    "dented": {
+      "precision": 0.4230769230769231,
+      "recall": 0.21568627450980393,
+      "mAP50": 0.1871025641025641,
+      "mAP50_95": 0.07976813186813188,
+      "ground_truth_boxes": 51,
+      "ground_truth_images": 12
+    },
+    "battery": {
+      "precision": 1.0,
+      "recall": 0.9473684210526315,
+      "mAP50": 0.9450000000000001,
+      "mAP50_95": 0.7486029411764706,
+      "ground_truth_boxes": 19,
+      "ground_truth_images": 19
+    },
+    "scratched": {
+      "precision": 0.75,
+      "recall": 0.46153846153846156,
+      "mAP50": 0.3933333333333334,
+      "mAP50_95": 0.19170000000000004,
+      "ground_truth_boxes": 13,
+      "ground_truth_images": 10
+    },
+    "swollen": {
+      "precision": 0.7692307692307693,
+      "recall": 0.8333333333333334,
+      "mAP50": 0.835,
+      "mAP50_95": 0.6190499999999999,
+      "ground_truth_boxes": 12,
+      "ground_truth_images": 12
+    }
+  },
+  "speed_ms_per_image": {
+    "preprocess": 1.590421058752231,
+    "inference": 46.070610525356116,
+    "loss": 0.0003368446701451352,
+    "postprocess": 0.368678942322731
+  }
+}

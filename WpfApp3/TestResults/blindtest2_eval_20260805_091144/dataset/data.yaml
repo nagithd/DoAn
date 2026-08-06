@@ -1,0 +1,10 @@
+path: D:/capstone/WPF/WpfApp3/TestResults/blindtest2_eval_20260805_091144/dataset
+train: images/test
+val: images/test
+test: images/test
+
+names:
+  0: dented
+  1: battery
+  2: scratched
+  3: swollen

@@ -2,6 +2,7 @@ using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Media;
 using System.Windows.Threading;
+using WpfApp3.Dialogs;
 using WpfApp3.Services;
 using WpfApp3.ViewModels;
 
@@ -25,6 +26,8 @@ public partial class MainWindow : Window
 
         _cameraViewModel = new CameraViewModel();
         DataContext = _cameraViewModel;
+        _cameraViewModel.InspectionResultRequested +=
+            CameraViewModel_InspectionResultRequested;
         _cameraViewModel.RefreshCommand.Execute(null);
 
         Loaded += MainWindow_Loaded;
@@ -36,7 +39,7 @@ public partial class MainWindow : Window
         SystemLogService.Add(
             "SYSTEM",
             "UI ready. Arduino conveyor serial control and the IMITECH " +
-            "capture-zone preview are available; live AI inference is pending.");
+            "Capture Zone can send automatic captures to the local AI service.");
     }
 
     private void MainWindow_Loaded(
@@ -127,9 +130,22 @@ public partial class MainWindow : Window
         SystemLogService.Entries.CollectionChanged -=
             SystemLog_CollectionChanged;
         LayoutViewport.SizeChanged -= LayoutViewport_SizeChanged;
+        _cameraViewModel.InspectionResultRequested -=
+            CameraViewModel_InspectionResultRequested;
         _cameraViewModel.Dispose();
         ConveyorControl.Dispose();
         RobotManualControl.Dispose();
         VisionTriggerControl.Dispose();
+    }
+
+    private void CameraViewModel_InspectionResultRequested(
+        object? sender,
+        Models.InspectionResult result)
+    {
+        var dialog = new AIDetectionResultDialog(result)
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
     }
 }

@@ -270,7 +270,7 @@
                                             <TextBlock Text="{Binding CaptureZoneStatus}"
                                                        Foreground="{StaticResource WarningColor}"
                                                        TextWrapping="Wrap"/>
-                                            <TextBlock Text="{Binding CaptureZoneForegroundPercent, StringFormat={}{0:0.0}% foreground}"
+                                            <TextBlock Text="{Binding CaptureZoneAiConfidence, StringFormat={}{0:P1} YOLO battery confidence}"
                                                        Foreground="{StaticResource HintText}"
                                                        FontSize="11"
                                                        Margin="0,3,0,0"/>
@@ -344,9 +344,24 @@
                                                    Style="{StaticResource CardTitleStyle}"/>
                                         <TextBlock Text="Windows AI model"
                                                    Style="{StaticResource LabelStyle}"/>
-                                        <TextBlock Text="Weights validated; live service pending"
-                                                   Foreground="{StaticResource WarningColor}"
+                                        <TextBlock Text="{Binding AiServiceStatus}"
+                                                   Foreground="{StaticResource SuccessColor}"
+                                                   TextWrapping="Wrap"
                                                    Margin="0,0,0,8"/>
+                                        <TextBlock Text="Latest AI result"
+                                                   Style="{StaticResource LabelStyle}"/>
+                                        <TextBlock Text="{Binding LastAiResult}"
+                                                   Foreground="{StaticResource PrimaryText}"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,0,0,8"/>
+                                        <Button Content="Check AI service"
+                                                Command="{Binding CheckAiServiceCommand}"
+                                                Style="{StaticResource NeutralButton}"
+                                                Margin="0,0,0,6"/>
+                                        <Button Content="View last AI result"
+                                                Command="{Binding ShowLastAiResultCommand}"
+                                                Style="{StaticResource PrimaryButton}"
+                                                Margin="0,0,0,10"/>
                                         <TextBlock Text="Conveyor driver"
                                                    Style="{StaticResource LabelStyle}"/>
                                         <TextBlock Text="Arduino serial COM control available"
