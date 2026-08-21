@@ -12,9 +12,6 @@ Repository này chứa toàn bộ **mã nguồn vận hành hiện hành**:
 - TensorRT monitor-only service cho camera DOFBOT;
 - script thiết lập, kiểm tra, benchmark và deploy.
 
-Các môi trường cục bộ, dataset, training run, report, backup và file build
-không được đưa vào Git.
-
 ## Kiến trúc hệ thống
 
 ```mermaid
@@ -40,16 +37,15 @@ flowchart LR
 ### Luồng phân loại hiện tại
 
 1. Cảm biến kim loại phát hiện pin; Arduino điều khiển băng tải.
-2. Arduino dừng pin tại IMITECH checkpoint và gửi thông báo qua USB Serial.
-3. WPF chụp một frame IMITECH và gửi ảnh tới Windows AI Service.
+2. Arduino dừng pin tại Camera checkpoint và gửi thông báo qua USB Serial.
+3. WPF chụp một frame và gửi ảnh tới AI Service.
 4. YOLOv8 trả về `normal`, `dented`, `scratched` hoặc `swollen`.
 5. Arduino tự đưa pin tới robot checkpoint và phát thông báo dừng.
-6. Với pin lỗi, WPF gửi một job `/robot/pick` tới Jetson Robot API.
+6. Với pin lỗi, WPF gửi một job `/robot/pick` tới Robot API.
 7. Với `normal`, WPF không tạo robot job.
 8. DOFBOT gắp pin lỗi vào hộp tương ứng và trở về HOME.
 
-Arduino hiện giữ quyền điều khiển timing và tự tiếp tục chu trình. WPF không
-gửi `robot_done@`. Camera DOFBOT và TensorRT chỉ dùng để quan sát/chẩn đoán,
+Arduino hiện giữ quyền điều khiển timing và tự tiếp tục chu trình. Camera DOFBOT chỉ dùng để quan sát/chẩn đoán,
 không kích hoạt robot.
 
 ## Cấu trúc repository
@@ -77,7 +73,7 @@ DoAn/
 
 ## Yêu cầu
 
-### Windows workstation / mini PC
+### Windows PC
 
 - Windows 10/11 x64;
 - [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0);
@@ -98,19 +94,19 @@ Nếu MVS được cài ở vị trí khác, cập nhật `HintPath` trong
 
 ### Jetson Nano / DOFBOT
 
-- Jetson Nano và nguồn phù hợp cho robot;
+- Jetson Nano và nguồn phù hợp;
 - Docker;
 - container DOFBOT hiện hành: `dofbot_robot_api`;
 - Python/Arm_Lib có sẵn trong container;
-- Jetson và Windows cùng mạng tin cậy.
+- Jetson và máy tính có cùng mạng tin cậy.
 
 Địa chỉ mặc định của project:
 
 | Thành phần | Địa chỉ |
 |---|---|
-| Windows AI Service | `http://127.0.0.1:7100` |
-| Jetson Robot API | `http://192.168.137.179:7000` |
-| Jetson TensorRT monitor | `http://192.168.137.179:7101` |
+|AI Service | `http://127.0.0.1:7100` |
+|Robot API | `http://192.168.137.179:7000` |
+|TensorRT monitor | `http://192.168.137.179:7101` |
 
 Các địa chỉ này phải được thay đổi nếu cấu hình mạng khác.
 
@@ -152,11 +148,11 @@ commit vào repository.
 ### 1. Kiểm tra an toàn
 
 - Dọn sạch vùng chuyển động của DOFBOT.
-- Không để dây cáp hoặc hộp chứa cản tay robot.
-- Đảm bảo pin không nằm kẹt giữa hai checkpoint.
-- Giữ công tắc/ngắt nguồn vật lý trong tầm với.
+- Không để đồ vật cản trở tay robot.
+- Đảm bảo băng tải trống cho tới khi vận hành.
+- Giữ công tắc ngắt nguồn vật lý trong tầm với.
 - Đóng Arduino Serial Monitor trước khi WPF mở COM port.
-- Đóng MVS acquisition trước khi WPF mở camera IMITECH.
+- Đóng MVS acquisition trước khi WPF mở camera.
 
 ### 2. Kiểm tra Jetson Robot API
 
@@ -179,11 +175,8 @@ Mở PowerShell riêng và giữ cửa sổ này chạy:
 
 ```powershell
 Set-Location "$ProjectRoot\Tools\AI\Service\MiniPC"
-.\Start-MiniPC-AI-Service.ps1 -ImageSize 640 -CpuThreads 2
+.\Start-MiniPC-AI-Service.ps1 -ImageSize 512 -CpuThreads 2
 ```
-
-Với mini PC cấu hình thấp, có thể thử `-ImageSize 512`, sau đó phải kiểm tra
-lại độ chính xác trên dữ liệu thực tế.
 
 Kiểm tra AI:
 
@@ -217,7 +210,7 @@ dotnet run -c Release
 5. Chỉ đưa **một pin** vào trong lần kiểm tra đầu tiên.
 6. Theo dõi System Log và vị trí thực của robot trong suốt chu trình.
 
-## Deploy Jetson Robot API
+## Deploy Robot API
 
 Backend hiện hành nằm trong `WpfApp3/RobotApi/Jetson/Backend`. Không sử dụng
 một bản `robot_api.py` khác cùng lúc.
@@ -278,7 +271,7 @@ Khi có nguy cơ va chạm hoặc chấn thương, sử dụng ngắt nguồn v�
 
 - Task: YOLO object detection;
 - Model: YOLOv8n Detection;
-- Input mặc định: 640 px;
+- Input mặc định: 512 px;
 - Classes: `Battery`, `Dented`, `Scratched`, `Swollen`;
 - Routing: defect có confidence cao nhất;
 - `Battery` không có defect được xem là `normal`;
@@ -302,9 +295,3 @@ WpfApp3/Tools/AI/Service/models/best.pt
 
 Trước khi chạy liên tục, cần kiểm tra timing thực tế, nguồn servo, HOME/pick/drop
 poses và thử từng class ở tốc độ thấp.
-
-## Source và release
-
-Repository là gói source nên không chứa Python runtime hoặc bản WPF
-self-contained. Máy đích không có Python phải sử dụng release self-contained
-có AI Service đóng gói riêng.
