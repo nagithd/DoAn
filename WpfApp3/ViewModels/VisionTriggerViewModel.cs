@@ -18,6 +18,8 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     private bool _disposed;
     private int _consecutiveRefreshFailures;
     private string? _lastLoggedRoutingKey;
+    private InspectionResult? _pendingDirectInspection;
+    private bool _checkpointInProgress;
     private const int MaximumRefreshFailures = 3;
 
     [ObservableProperty]
@@ -108,6 +110,348 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
             await RefreshStatusAsync(includeFrame: true);
     }
 
+    /// <summary>
+    /// Loads a static DOFBOT-camera state for report screenshots only.
+    /// The poll timer remains stopped and no HTTP request is sent.
+    /// </summary>
+    public void LoadReportPlaceholder(string imagePath)
+    {
+        RemoteFrame = CreateBitmap(File.ReadAllBytes(imagePath));
+        ConnectionStatus = "Connected";
+        IsConnected = true;
+        VisionRunning = true;
+        CameraOpen = true;
+        RobotReady = true;
+        AutomaticTriggerActive = false;
+        AutomaticTriggerRequested = false;
+        TriggerLatched = false;
+        FrameCount = 12840;
+        StableCount = 0;
+        DetectionSummary = "Battery detected inside the checkpoint zone";
+        TriggerSummary = "Arduino checkpoint signal ready";
+        JobSummary = "No active robot job";
+        RoutingSummary = "scratched -> direct fixed-pose pick";
+        NextAiResult = "scratched (84.0%) waiting for Arduino checkpoint";
+        AiQueueSize = 0;
+        LastError = "-";
+    }
+
+    /// <summary>
+    /// Stores the latest IMITECH result locally. No classification is sent to
+    /// Vision API: Arduino decides when the battery reaches the robot and WPF
+    /// then sends one direct /robot/pick command to Jetson.
+    /// </summary>
+    public void StoreDirectInspectionResult(InspectionResult result)
+    {
+        string className = result.DetectedClass.Trim().ToLowerInvariant();
+        if (className is not ("normal" or "dented" or "scratched" or "swollen"))
+        {
+            _pendingDirectInspection = null;
+            NextAiResult = "No routable AI result";
+            SystemLogService.Add(
+                "AI ROUTING",
+                $"Unsupported AI class '{className}'; no robot signal will be sent.");
+            return;
+        }
+
+        _pendingDirectInspection = result;
+        NextAiResult = $"{className} ({result.Confidence:P1}) waiting for Arduino checkpoint";
+        RoutingSummary = className == "normal"
+            ? "NORMAL -> conveyor pass"
+            : $"{className} -> direct fixed-pose pick";
+
+        SystemLogService.Add(
+            "AI ROUTING",
+            $"Stored {className} ({result.Confidence:P1}) locally; " +
+            "waiting for EVENT:ROBOT_STOPPED.");
+
+        if (result.Confidence < 0.40)
+        {
+            SystemLogService.Add(
+                "AI ROUTING",
+                "Low-confidence result will still use the selected class in " +
+                "the simplified open-loop test mode.");
+        }
+    }
+
+    public async Task<bool> PrepareRobotForSystemStartAsync(
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _visionApi.Configure(RobotBaseUrl);
+            RobotStatusResponse response =
+                await _visionApi.GetRobotStatusAsync(cancellationToken);
+            RobotStatusResponse robot = response.EffectiveState;
+
+            if (!robot.MotionEnabled || robot.Busy || robot.QueueSize > 0)
+            {
+                RobotReady = false;
+                LastError = $"Robot state: {robot.State}; busy={robot.Busy}; " +
+                    $"queue={robot.QueueSize}; motion={robot.MotionEnabled}";
+                SystemLogService.Add(
+                    "SAFETY",
+                    "System start cannot move DOFBOT to HOME because it is " +
+                    $"not idle. {LastError}");
+                return false;
+            }
+
+            if (string.Equals(
+                    robot.State,
+                    "vision_ready",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                RobotReady = true;
+                LastError = "-";
+                SystemLogService.Add(
+                    "ROBOT",
+                    "DOFBOT is already at HOME and ready for startup.");
+                return true;
+            }
+
+            if (!string.Equals(
+                    robot.State,
+                    "idle",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                RobotReady = false;
+                LastError = $"Robot state: {robot.State}";
+                SystemLogService.Add(
+                    "SAFETY",
+                    "Automatic HOME is allowed only from the idle state. " +
+                    $"Current state is '{robot.State}'. Operator inspection " +
+                    "is required.");
+                return false;
+            }
+
+            SystemLogService.Add(
+                "ROBOT",
+                "DOFBOT is idle; START SYSTEM is moving it to HOME.");
+            RobotCommandResponse homeResponse =
+                await _visionApi.HomeAsync(cancellationToken);
+            if (!homeResponse.Success)
+            {
+                throw new InvalidOperationException(
+                    homeResponse.Error ?? "Robot HOME command failed.");
+            }
+
+            response = await _visionApi.GetRobotStatusAsync(cancellationToken);
+            robot = response.EffectiveState;
+
+            bool ready = robot.MotionEnabled &&
+                !robot.Busy &&
+                robot.QueueSize == 0 &&
+                string.Equals(
+                    robot.State,
+                    "vision_ready",
+                    StringComparison.OrdinalIgnoreCase);
+
+            RobotReady = ready;
+            LastError = ready
+                ? "-"
+                : $"Robot state: {robot.State}; busy={robot.Busy}; " +
+                  $"queue={robot.QueueSize}; motion={robot.MotionEnabled}";
+
+            SystemLogService.Add(
+                ready ? "ROBOT" : "SAFETY",
+                ready
+                    ? "DOFBOT reached HOME and is ready for automatic startup."
+                    : "DOFBOT did not enter vision_ready after HOME. " +
+                      LastError);
+            return ready;
+        }
+        catch (Exception ex)
+        {
+            RobotReady = false;
+            LastError = ex.Message;
+            SystemLogService.Add(
+                "SAFETY",
+                $"System start could not verify Robot API: {ex.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Stops DOFBOT camera processing and WPF polling without stopping the
+    /// Robot API, powering off Jetson, resetting the arm or interrupting a
+    /// robot motion command.
+    /// </summary>
+    public async Task StopForSystemAsync(
+        CancellationToken cancellationToken = default)
+    {
+        _pollTimer.Stop();
+
+        if (IsConnected && VisionRunning)
+        {
+            try
+            {
+                VisionStatusResponse status =
+                    await _visionApi.StopAsync(cancellationToken);
+                ApplyStatus(status);
+                SystemLogService.Add(
+                    "DOFBOT CAM",
+                    "STOP SYSTEM stopped DOFBOT camera processing.");
+            }
+            catch (Exception ex)
+            {
+                LastError = ex.Message;
+                SystemLogService.Add(
+                    "SAFETY",
+                    "DOFBOT camera stop could not be confirmed; WPF polling " +
+                    $"will still stop. Detail: {ex.Message}");
+            }
+        }
+
+        IsConnected = false;
+        ConnectionStatus = "Disconnected";
+        VisionRunning = false;
+        CameraOpen = false;
+        RemoteFrame = null;
+        SystemLogService.Add(
+            "DOFBOT CAM",
+            "WPF monitoring stopped. Jetson and Robot API remain powered.");
+    }
+
+    /// <summary>
+    /// Called only after Arduino confirms that the conveyor is stopped at the
+    /// robot. Defects produce one direct Robot API command; normal batteries
+    /// produce no motion. Arduino owns the checkpoint dwell and conveyor
+    /// restart, so WPF neither waits for job completion nor sends robot_done@.
+    /// </summary>
+    public async Task<bool> TriggerAtRobotCheckpointAsync(
+        CancellationToken cancellationToken = default)
+    {
+        if (_checkpointInProgress)
+        {
+            SystemLogService.Add(
+                "SAFETY",
+                "A robot checkpoint request is already in progress.");
+            return false;
+        }
+
+        _checkpointInProgress = true;
+        try
+        {
+            InspectionResult? inspection = _pendingDirectInspection;
+            if (inspection is null)
+            {
+                throw new InvalidOperationException(
+                    "No local AI result is waiting for the Arduino robot checkpoint.");
+            }
+
+            string className = inspection.DetectedClass.Trim().ToLowerInvariant();
+            if (className == "normal")
+            {
+                SystemLogService.Add(
+                    "AI ROUTING",
+                    "NORMAL -> PASS. No robot command was sent.");
+                CompleteArduinoControlledCheckpoint(inspection);
+                return true;
+            }
+
+            _visionApi.Configure(RobotBaseUrl);
+            RobotStatusResponse statusResponse =
+                await _visionApi.GetRobotStatusAsync(cancellationToken);
+            RobotStatusResponse robot = statusResponse.EffectiveState;
+
+            if (!robot.MotionEnabled)
+            {
+                throw new InvalidOperationException(
+                    "DOFBOT motion is disabled; checkpoint routing was not started.");
+            }
+
+            if (robot.Busy || robot.QueueSize > 0)
+            {
+                throw new InvalidOperationException(
+                    "DOFBOT is busy or has a queued job. No new pick was sent; " +
+                    "Arduino will continue its programmed cycle.");
+            }
+
+            if (!string.Equals(
+                    robot.State,
+                    "vision_ready",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException(
+                    $"DOFBOT is '{robot.State}', not vision_ready. " +
+                    "Move it to HOME and verify the gripper is open before retrying.");
+            }
+
+            SystemLogService.Add(
+                "ROBOT",
+                "DOFBOT state confirmed as vision_ready; skipping duplicate " +
+                "HOME, gripper-open and PICK_ABOVE commands.");
+
+            string inspectionId = string.IsNullOrWhiteSpace(inspection.InspectionId)
+                ? Guid.NewGuid().ToString("N")
+                : inspection.InspectionId;
+            RobotJobResponse response = await _visionApi.SendDirectPickAsync(
+                className,
+                inspectionId,
+                cancellationToken);
+
+            VisionJobSummary? job = response.Job?.NestedJob ?? response.Job;
+            if (string.IsNullOrWhiteSpace(job?.JobId))
+            {
+                throw new InvalidOperationException(
+                    response.Error ?? "Robot API did not accept the direct pick signal.");
+            }
+
+            string jobId = job.JobId;
+            SystemLogService.Add(
+                "ROBOT",
+                $"Arduino checkpoint -> direct {className} pick accepted " +
+                $"(job {jobId[..Math.Min(8, jobId.Length)]}). " +
+                "WPF will not wait or send robot_done@; Arduino controls " +
+                "checkpoint timing and conveyor restart.");
+
+            CompleteArduinoControlledCheckpoint(inspection);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LastError = ex.Message;
+            SystemLogService.Add(
+                "SAFETY",
+                "Checkpoint routing failed. No robot job was submitted; " +
+                "Arduino may still continue its programmed cycle. Operator " +
+                $"inspection is required: {ex.Message}");
+            return false;
+        }
+        finally
+        {
+            _checkpointInProgress = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task RetryCheckpointAsync() =>
+        await TriggerAtRobotCheckpointAsync();
+
+    private void CompleteArduinoControlledCheckpoint(
+        InspectionResult processedInspection)
+    {
+        if (ReferenceEquals(
+                _pendingDirectInspection,
+                processedInspection))
+        {
+            _pendingDirectInspection = null;
+            NextAiResult = "No AI result waiting";
+        }
+        else
+        {
+            SystemLogService.Add(
+                "AI ROUTING",
+                "A newer AI result arrived while the checkpoint request was " +
+                "being submitted; it was preserved for the next cycle.");
+        }
+
+        SystemLogService.Add(
+            "AI ROUTING",
+            "WPF checkpoint handling finished. Arduino independently " +
+            "controls conveyor restart; no robot_done@ was transmitted.");
+    }
+
     [RelayCommand]
     private async Task ConnectAsync()
     {
@@ -164,7 +508,8 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 "DOFBOT CAM",
                 AutomaticTriggerActive
                     ? "Vision started in AUTO mode."
-                    : "Vision started in MONITOR ONLY mode.");
+                    : "DOFBOT camera preview started in CHECKPOINT mode. " +
+                      "Automatic robot routing is controlled by Arduino.");
         }
         catch (Exception ex)
         {
@@ -216,7 +561,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task VisionHomeAsync()
+    private async Task HomeAsync()
     {
         if (!EnsureConnected())
             return;
@@ -225,13 +570,13 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         {
             SystemLogService.Add(
                 "ROBOT",
-                "Moving to VISION_HOME.");
+                "Moving to HOME.");
             RobotCommandResponse response =
-                await _visionApi.VisionHomeAsync();
+                await _visionApi.HomeAsync();
             if (!response.Success)
             {
                 throw new InvalidOperationException(
-                    response.Error ?? "VISION_HOME failed.");
+                    response.Error ?? "HOME failed.");
             }
 
             await RefreshStatusAsync(includeFrame: false);
@@ -266,7 +611,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 "DOFBOT CAM",
                 AutomaticTriggerActive
                     ? "Timing saved; AUTO trigger is enabled."
-                    : "Timing saved; monitor-only mode remains enabled.");
+                    : "Timing saved; Arduino CHECKPOINT mode remains active.");
             await RefreshStatusAsync(includeFrame: false);
         }
         catch (Exception ex)
@@ -404,19 +749,47 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         ApplyNextClassification(
             status.ClassificationQueue?.NextResult);
 
-        if (status.LastDetection is { } detection)
+        if (!status.VisionProcessingEnabled && status.CameraOpen)
         {
             DetectionSummary =
-                $"Position ({detection.CenterX:0}, {detection.CenterY:0})  •  " +
-                $"object {detection.RelativeAngleDeg:0.0}°  •  " +
-                $"servo 5 {detection.WristAngle:0.0}°";
+                "Vision processing disabled • raw DOFBOT camera preview only";
+            TriggerSummary = "Vision trigger disabled";
+            TriggerLatched = false;
+            StableCount = 0;
+        }
+        else if (status.LastDetection is { } detection)
+        {
+            if (string.Equals(
+                    detection.Detector,
+                    "yolov8n_tensorrt_fp16",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                DetectionSummary =
+                    $"Battery at ({detection.CenterX:0}, {detection.CenterY:0})  •  " +
+                    $"confidence {(detection.Confidence ?? 0):P1}  •  " +
+                    $"TensorRT {(detection.InferenceMs ?? status.LastInferenceMs ?? 0):0.0} ms  •  " +
+                    "MONITOR ONLY";
+            }
+            else
+            {
+                DetectionSummary =
+                    $"Position ({detection.CenterX:0}, {detection.CenterY:0})  •  " +
+                    $"object {detection.RelativeAngleDeg:0.0}°  •  " +
+                    $"camera angle {(detection.WristAngle ?? 0):0.0}° (diagnostic)";
+            }
         }
         else
         {
-            DetectionSummary = "No object in the entry zone";
+            DetectionSummary = status.MonitorOnly && status.DetectorAvailable
+                ? "No battery detected in the entry zone • TensorRT MONITOR ONLY"
+                : "No object in the entry zone";
         }
 
-        if (status.LastTrigger is { } trigger)
+        if (!status.VisionProcessingEnabled)
+        {
+            TriggerSummary = "Vision trigger disabled";
+        }
+        else if (status.LastTrigger is { } trigger)
         {
             TriggerSummary =
                 $"{trigger.ClassName ?? "unclassified"}  •  " +
@@ -426,7 +799,9 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 (string.IsNullOrWhiteSpace(trigger.Action)
                     ? ""
                     : $"{trigger.Action}  •  ") +
-                $"servo 5 {trigger.WristAngle:0.0}°  •  " +
+                (trigger.WristAngle is null
+                    ? "servo 5 from fixed pose  •  "
+                    : $"servo 5 {trigger.WristAngle:0.0}°  •  ") +
                 $"delay {trigger.StartDelayMs} ms" +
                 (trigger.Late ? "  •  LATE" : "");
 

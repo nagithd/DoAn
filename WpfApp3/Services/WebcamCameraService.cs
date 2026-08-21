@@ -205,6 +205,40 @@ namespace WpfApp3.Services
         }
 
         /// <summary>
+        /// Returns a reduced copy for the live WPF preview. The source frame
+        /// stored by the service is not modified and remains available to
+        /// Capture/AI at its original resolution.
+        /// </summary>
+        public Mat? GetPreviewMatFrame(int maximumWidth)
+        {
+            if (maximumWidth <= 0)
+                throw new ArgumentOutOfRangeException(nameof(maximumWidth));
+
+            lock (_frameLock)
+            {
+                if (_currentMat == null || _currentMat.Empty())
+                    return null;
+
+                if (_currentMat.Width <= maximumWidth)
+                    return _currentMat.Clone();
+
+                double scale = (double)maximumWidth / _currentMat.Width;
+                int previewHeight = Math.Max(
+                    1,
+                    (int)Math.Round(_currentMat.Height * scale));
+                var preview = new Mat();
+                Cv2.Resize(
+                    _currentMat,
+                    preview,
+                    new OpenCvSharp.Size(maximumWidth, previewHeight),
+                    0,
+                    0,
+                    InterpolationFlags.Area);
+                return preview;
+            }
+        }
+
+        /// <summary>
         /// Captures and saves the current frame to disk.
         /// </summary>
         public string? CaptureFrame()

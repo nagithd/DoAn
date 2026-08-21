@@ -1,46 +1,29 @@
-# DOFBOT manual-control API
+# DOFBOT Robot API
 
-The WPF `Robot Manual` tab uses the existing read endpoints:
+The authoritative Jetson backend is stored inside this project:
 
-- `GET /health`
-- `GET /robot/status`
-- `GET /robot/servos`
-
-It additionally requires:
-
-- `POST /robot/servo` to move one servo.
-- `POST /robot/servos` to move all six servos.
-
-Copy `manual_control_routes.py` to `/root` inside the `kind_pare` container:
-
-```bash
-docker cp manual_control_routes.py kind_pare:/root/manual_control_routes.py
+```text
+RobotApi/Jetson/Backend/
+├── robot_api.py
+├── vision_trigger.py
+└── deploy.ps1
 ```
 
-In `/root/robot_api.py`, import the helper near the other imports:
+The systemd unit and administration scripts are in `RobotApi/Jetson`. The
+optional monitor-only TensorRT detector is in `RobotApi/Jetson/TensorRT`.
 
-```python
-from manual_control_routes import register_manual_control_routes
+Deploy the current backend:
+
+```powershell
+Set-Location "D:\capstone\WPF\WpfApp3\RobotApi\Jetson\Backend"
+.\deploy.ps1
+
+Set-Location "D:\capstone\WPF\WpfApp3\RobotApi\Jetson"
+.\restart_service.ps1
+.\check_service.ps1
 ```
 
-Then, inside `if __name__ == "__main__":`, register the routes immediately
-after `initialize_robot()` and before `app.run(...)`:
-
-```python
-initialize_robot()
-register_manual_control_routes(
-    app=app,
-    arm=arm,
-    robot_lock=motion_lock,
-    robot_state=robot_state,
-    update_state=update_state,
-    motion_enabled=ENABLE_MOTION,
-)
-```
-
-It is important to call this after `initialize_robot()` so that `arm` is an
-`Arm_Device`, not `None`. Restart the Robot API after editing.
-
-Start with a long movement time and move only one servo by a few degrees. The
-software Reset command is not an emergency stop; keep the physical power switch
-within reach while calibrating.
+`robot_api.py` is the only active implementation of the robot endpoints,
+including manual maintenance endpoints. Do not import the retired
+`manual_control_routes.py` helper and do not run the Yahboom application while
+the systemd-controlled API owns the robot and camera devices.

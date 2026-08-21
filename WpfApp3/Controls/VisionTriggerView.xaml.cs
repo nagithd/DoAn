@@ -7,6 +7,8 @@ public partial class VisionTriggerView : UserControl, IDisposable
 {
     private readonly VisionTriggerViewModel _viewModel;
 
+    public VisionTriggerViewModel ViewModel => _viewModel;
+
     public VisionTriggerView()
     {
         InitializeComponent();

@@ -4,7 +4,7 @@ setlocal
 set "ROOT=%~dp0"
 set "AI_EXE=%ROOT%AIService\BatteryAIService.exe"
 set "MODEL=%ROOT%AIService\models\best.pt"
-set "WPF_EXE=%ROOT%WpfApp3\WpfApp3.exe"
+set "WPF_EXE=%ROOT%WpfApp3.exe"
 
 if not exist "%AI_EXE%" (
     echo [ERROR] AI Service was not found: "%AI_EXE%"
@@ -45,4 +45,3 @@ if errorlevel 1 (
 
 start "Battery Inspection System" "%WPF_EXE%"
 endlocal
-

@@ -11,7 +11,7 @@ Type=simple
 User=jetson
 Environment=PYTHONUNBUFFERED=1
 Environment=TZ=Asia/Ho_Chi_Minh
-Environment=DOFBOT_CONTAINER=kind_pare
+Environment=DOFBOT_CONTAINER=dofbot_robot_api
 Environment=DOFBOT_API_PATH=/root/robot_api.py
 
 # Make the installation idempotent: start the existing container and stop

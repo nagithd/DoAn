@@ -12,8 +12,8 @@
             <Setter Property="Background" Value="#1E1E1E"/>
             <Setter Property="Foreground" Value="White"/>
             <Setter Property="CaretBrush" Value="White"/>
-            <Setter Property="SelectionBrush" Value="{DynamicResource AccentColor}"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
+            <Setter Property="SelectionBrush" Value="{StaticResource AccentColor}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="10,4"/>
             <Setter Property="IsReadOnly" Value="False"/>
@@ -34,7 +34,7 @@
                             <Trigger Property="IsKeyboardFocused" Value="True">
                                 <Setter TargetName="InputBorder"
                                         Property="BorderBrush"
-                                        Value="{DynamicResource AccentColor}"/>
+                                        Value="{StaticResource AccentColor}"/>
                                 <Setter TargetName="InputBorder"
                                         Property="BorderThickness"
                                         Value="2"/>
@@ -42,7 +42,7 @@
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="InputBorder"
                                         Property="BorderBrush"
-                                        Value="{DynamicResource AccentColor}"/>
+                                        Value="{StaticResource AccentColor}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.55"/>
@@ -59,11 +59,10 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- Connection and live robot status -->
-        <Border Grid.Row="0" Style="{DynamicResource CardStyle}">
+        <Border Grid.Row="0" Style="{StaticResource CardStyle}">
             <Grid Background="Transparent">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -71,11 +70,11 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="DOFBOT Robot API" Style="{DynamicResource CardTitleStyle}"/>
-                    <TextBlock Text="Robot API address" Style="{DynamicResource LabelStyle}"/>
+                    <TextBlock Text="DOFBOT Robot API" Style="{StaticResource CardTitleStyle}"/>
+                    <TextBlock Text="Robot API address" Style="{StaticResource LabelStyle}"/>
                     <TextBox Text="{Binding RobotBaseUrl, UpdateSourceTrigger=PropertyChanged}"
                              Style="{StaticResource RobotTextBoxStyle}"
-                             Height="34"
+                             Height="42"
                              Margin="0,4,12,0"
                              ToolTip="Ví dụ: http://192.168.137.179:7000"
                              VerticalContentAlignment="Center"/>
@@ -84,18 +83,18 @@
                 <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Bottom">
                     <Button Content="Connect"
                             Command="{Binding ConnectCommand}"
-                            Style="{DynamicResource PrimaryButton}"
-                            Width="100"
+                            Style="{StaticResource PrimaryButton}"
+                            Width="120"
                             Margin="0,0,8,0"/>
                     <Button Content="Disconnect"
                             Command="{Binding DisconnectCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="110"/>
+                            Style="{StaticResource NeutralButton}"
+                            Width="145"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Style="{DynamicResource CardStyle}">
+        <Border Grid.Row="1" Style="{StaticResource CardStyle}">
             <Grid Background="Transparent">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -107,157 +106,79 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel Grid.Column="0">
-                    <TextBlock Text="Connection" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding ConnectionStatus}" Style="{DynamicResource ValueStyle}" FontWeight="SemiBold"/>
+                    <TextBlock Text="Connection" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding ConnectionStatus}" Style="{StaticResource ValueStyle}" FontWeight="SemiBold"/>
                 </StackPanel>
                 <StackPanel Grid.Column="1">
-                    <TextBlock Text="Robot state" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding RobotState}" Style="{DynamicResource ValueStyle}" FontWeight="SemiBold"/>
+                    <TextBlock Text="Robot state" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding RobotState}" Style="{StaticResource ValueStyle}" FontWeight="SemiBold"/>
                 </StackPanel>
                 <StackPanel Grid.Column="2">
-                    <TextBlock Text="Current step" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding CurrentStep}" Style="{DynamicResource ValueStyle}"/>
+                    <TextBlock Text="Current step" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding CurrentStep}" Style="{StaticResource ValueStyle}"/>
                 </StackPanel>
                 <StackPanel Grid.Column="3">
-                    <TextBlock Text="Busy" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding IsBusy}" Style="{DynamicResource ValueStyle}"/>
+                    <TextBlock Text="Busy" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding IsBusy}" Style="{StaticResource ValueStyle}"/>
                 </StackPanel>
                 <StackPanel Grid.Column="4">
-                    <TextBlock Text="Motion enabled" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding MotionEnabled}" Style="{DynamicResource ValueStyle}"/>
+                    <TextBlock Text="Motion enabled" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding MotionEnabled}" Style="{StaticResource ValueStyle}"/>
                 </StackPanel>
                 <StackPanel Grid.Column="5">
-                    <TextBlock Text="Job queue" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding QueueSize}" Style="{DynamicResource ValueStyle}"/>
+                    <TextBlock Text="Job queue" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding QueueSize}" Style="{StaticResource ValueStyle}"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Six servo channels -->
-        <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Servos}">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <UniformGrid Columns="2"/>
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <Border Style="{DynamicResource CardStyle}" Margin="0,0,12,12">
-                            <Grid Background="Transparent">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="90"/>
-                                </Grid.ColumnDefinitions>
+        <!-- Servo sliders and direct-angle inputs are intentionally omitted.
+             Automatic routing owns motion during production operation. -->
+        <Border Grid.Row="2" Style="{StaticResource CardStyle}" Margin="0">
+            <Grid Background="Transparent">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="0"
-                                           Text="{Binding Name}"
-                                           Style="{DynamicResource CardTitleStyle}"/>
-                                <TextBlock Grid.Row="0"
-                                           Grid.Column="1"
-                                           Text="{Binding CurrentAngle, StringFormat={}{0:0.0}°}"
-                                           Foreground="{DynamicResource SuccessColor}"
-                                           FontSize="18"
-                                           FontWeight="Bold"
-                                           HorizontalAlignment="Right"/>
+                <TextBlock Grid.Row="0"
+                           Text="Robot safety and recovery"
+                           Style="{StaticResource CardTitleStyle}"/>
 
-                                <Slider Grid.Row="1"
-                                        Grid.Column="0"
-                                        Minimum="0"
-                                        Maximum="180"
-                                        TickFrequency="1"
-                                        IsSnapToTickEnabled="False"
-                                        Value="{Binding TargetAngle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
-                                        PreviewMouseLeftButtonDown="ServoSlider_PreviewMouseLeftButtonDown"
-                                        PreviewMouseLeftButtonUp="ServoSlider_PreviewMouseLeftButtonUp"
-                                        ValueChanged="ServoSlider_ValueChanged"
-                                        KeyUp="ServoSlider_KeyUp"
-                                        Margin="0,8,14,8"/>
+                <TextBlock Grid.Row="1"
+                           Text="Automatic routing controls all servo motion. Direct servo sliders and angle inputs are hidden from the production interface."
+                           Style="{StaticResource SecondaryTextStyle}"
+                           TextWrapping="Wrap"
+                           Margin="0,0,0,18"/>
 
-                                <TextBox Grid.Row="1"
-                                         Grid.Column="1"
-                                         Text="{Binding TargetAngle, StringFormat={}{0:0.0}, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource RobotTextBoxStyle}"
-                                         Height="32"
-                                         VerticalContentAlignment="Center"
-                                         HorizontalContentAlignment="Center"
-                                         GotKeyboardFocus="ServoAngleTextBox_GotKeyboardFocus"
-                                         PreviewKeyDown="ServoAngleTextBox_PreviewKeyDown"
-                                         LostKeyboardFocus="ServoAngleTextBox_LostKeyboardFocus"
-                                         ToolTip="Enter an angle from 0 to 180, then press Enter"/>
+                <StackPanel Grid.Row="2">
+                    <TextBlock Text="Last Robot API message"
+                               Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding LastError}"
+                               Style="{StaticResource ValueStyle}"
+                               TextWrapping="Wrap"/>
+                </StackPanel>
 
-                                <TextBlock Grid.Row="2"
-                                           Grid.Column="0"
-                                           Text="{Binding ServoId, StringFormat=Servo ID {0}  •  Drag slider or enter value + Enter}"
-                                           Style="{DynamicResource LabelStyle}"
-                                           VerticalAlignment="Center"/>
-                            </Grid>
-                        </Border>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </ScrollViewer>
-
-        <!-- Manual commands -->
-        <Border Grid.Row="3" Style="{DynamicResource CardStyle}" Margin="0">
-            <StackPanel Background="Transparent">
-                <WrapPanel HorizontalAlignment="Left">
+                <StackPanel Grid.Row="3"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Right"
+                            VerticalAlignment="Bottom"
+                            Margin="0,20,0,0">
                     <Button Content="HOME"
                             Command="{Binding HomeCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="90"
-                            Margin="0,0,8,0"/>
-                    <Button Content="VISION HOME"
-                            Command="{Binding VisionHomeCommand}"
-                            Style="{DynamicResource PrimaryButton}"
-                            Width="120"
-                            Margin="0,0,8,0"
-                            ToolTip="Move to the calibrated camera trigger pose"/>
-                    <Button Content="Open gripper"
-                            Command="{Binding OpenGripperCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="120"
-                            Margin="0,0,8,0"/>
-                    <Button Content="Close gripper"
-                            Command="{Binding CloseGripperCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="120"
-                            Margin="0,0,8,0"/>
-                    <Button Content="Reset"
+                            Style="{StaticResource NeutralButton}"
+                            MinWidth="150"
+                            Margin="0,0,10,0"
+                            ToolTip="Return DOFBOT to its configured HOME pose"/>
+                    <Button Content="RESET"
                             Command="{Binding ResetCommand}"
-                            Style="{DynamicResource DangerButton}"
-                            Width="90"/>
-                </WrapPanel>
-
-                <WrapPanel Margin="0,8,0,0">
-                    <TextBlock Text="Move time (ms)"
-                               Style="{DynamicResource LabelStyle}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,8,0"/>
-                    <TextBox Text="{Binding ServoMoveTimeMs, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource RobotTextBoxStyle}"
-                             Width="70"
-                             Height="34"
-                             VerticalContentAlignment="Center"
-                             HorizontalContentAlignment="Center"
-                             Margin="0,0,12,0"/>
-                    <Button Content="Copy actual"
-                            Command="{Binding CopyCurrentToTargetsCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="110"
-                            Margin="0,0,8,0"/>
-                    <Button Content="Apply all"
-                            Command="{Binding ApplyAllCommand}"
-                            Style="{DynamicResource SuccessButton}"
-                            Width="110"/>
-                </WrapPanel>
-            </StackPanel>
+                            Style="{StaticResource DangerButton}"
+                            MinWidth="150"
+                            ToolTip="Clear the Robot API error state; this does not power-cycle Jetson"/>
+                </StackPanel>
+            </Grid>
         </Border>
     </Grid>
 </UserControl>

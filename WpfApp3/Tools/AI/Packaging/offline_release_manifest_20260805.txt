@@ -1,0 +1,6 @@
+Archive: artifacts/releases/2026-08-05/BatteryAIService-offline-win-x64-20260805.zip
+SHA-256: C98A005D4A82C28408E23F82D9F025ABD6D0D1C3AE39FA929F3495D78AB23ECC
+ZIP entries: 4659
+Executable: BatteryAIService-offline-win-x64-20260805/AIService/BatteryAIService.exe
+Model: BatteryAIService-offline-win-x64-20260805/AIService/models/best.pt
+Model role: historical v2 detector package; not the current segmentation candidate

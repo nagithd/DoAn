@@ -7,6 +7,8 @@ public partial class ConveyorControlView : UserControl, IDisposable
 {
     private readonly ConveyorControlViewModel _viewModel;
 
+    public ConveyorControlViewModel ViewModel => _viewModel;
+
     public ConveyorControlView()
     {
         InitializeComponent();

@@ -6,7 +6,7 @@
     <!-- Page Title Style -->
     <Style x:Key="PageTitleStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
-        <Setter Property="FontSize" Value="24"/>
+        <Setter Property="FontSize" Value="34"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Margin" Value="0,0,0,16"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -15,7 +15,7 @@
     <!-- Section Header Style -->
     <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
-        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="FontSize" Value="28"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Margin" Value="0,0,0,12"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -24,7 +24,7 @@
     <!-- Subsection Header Style -->
     <Style x:Key="SubsectionHeaderStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#CCCCCC"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="24"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Margin" Value="0,0,0,8"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -33,7 +33,7 @@
     <!-- Body Text Style -->
     <Style x:Key="BodyTextStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#CCCCCC"/>
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="22"/>
         <Setter Property="LineHeight" Value="18"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
@@ -41,30 +41,37 @@
     <!-- Secondary Text Style -->
     <Style x:Key="SecondaryTextStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#858585"/>
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontSize" Value="21"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
 
     <!-- Label Style -->
     <Style x:Key="LabelStyle" TargetType="TextBlock">
-        <Setter Property="Foreground" Value="#CCCCCC"/>
-        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="Foreground" Value="{StaticResource HintTextBrush}"/>
+        <Setter Property="FontSize" Value="21"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="Margin" Value="0,0,0,4"/>
+        <Setter Property="FontFamily" Value="Segoe UI"/>
+    </Style>
+
+    <!-- Standard value text used by status and device cards -->
+    <Style x:Key="ValueStyle" TargetType="TextBlock">
+        <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+        <Setter Property="FontSize" Value="23"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
 
     <!-- Value/Metric Style -->
     <Style x:Key="MetricValueStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
-        <Setter Property="FontSize" Value="18"/>
+        <Setter Property="FontSize" Value="28"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
 
     <!-- Status Text Style -->
     <Style x:Key="StatusTextStyle" TargetType="TextBlock">
-        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontSize" Value="22"/>
         <Setter Property="FontWeight" Value="SemiBold"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
@@ -72,7 +79,7 @@
     <!-- Small Label Style -->
     <Style x:Key="SmallLabelStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#858585"/>
-        <Setter Property="FontSize" Value="10"/>
+        <Setter Property="FontSize" Value="20"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
     </Style>
 

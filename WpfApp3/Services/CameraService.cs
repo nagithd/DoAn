@@ -36,6 +36,13 @@ namespace WpfApp3.Services
         Mat? GetCurrentMatFrame();
 
         /// <summary>
+        /// Gets a resized copy for live display without cloning the full
+        /// source frame into the UI layer. The source frame remains unchanged
+        /// for Capture/AI.
+        /// </summary>
+        Mat? GetPreviewMatFrame(int maximumWidth);
+
+        /// <summary>
         /// Captures and saves the current frame to disk.
         /// Returns the file path if successful, null otherwise.
         /// </summary>

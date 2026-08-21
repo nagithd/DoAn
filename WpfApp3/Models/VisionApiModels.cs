@@ -28,6 +28,21 @@ public sealed class VisionStatusResponse
     [JsonPropertyName("auto_trigger")]
     public bool AutoTrigger { get; set; }
 
+    [JsonPropertyName("monitor_only")]
+    public bool MonitorOnly { get; set; }
+
+    [JsonPropertyName("vision_processing_enabled")]
+    public bool VisionProcessingEnabled { get; set; }
+
+    [JsonPropertyName("detection_backend")]
+    public string? DetectionBackend { get; set; }
+
+    [JsonPropertyName("detector_available")]
+    public bool DetectorAvailable { get; set; }
+
+    [JsonPropertyName("last_inference_ms")]
+    public double? LastInferenceMs { get; set; }
+
     [JsonPropertyName("robot_ready")]
     public bool RobotReady { get; set; }
 
@@ -55,6 +70,9 @@ public sealed class VisionStatusResponse
 
 public sealed class VisionDetection
 {
+    [JsonPropertyName("detector")]
+    public string? Detector { get; set; }
+
     [JsonPropertyName("center_x")]
     public double CenterX { get; set; }
 
@@ -65,7 +83,7 @@ public sealed class VisionDetection
     public double RelativeAngleDeg { get; set; }
 
     [JsonPropertyName("wrist_angle")]
-    public double WristAngle { get; set; }
+    public double? WristAngle { get; set; }
 
     [JsonPropertyName("class_name")]
     public string? ClassName { get; set; }
@@ -85,12 +103,20 @@ public sealed class VisionDetection
     [JsonPropertyName("confidence")]
     public double? Confidence { get; set; }
 
+    [JsonPropertyName("inference_ms")]
+    public double? InferenceMs { get; set; }
+
     [JsonPropertyName("action")]
     public string? Action { get; set; }
 }
 
 public sealed class VisionJobSummary
 {
+    // Compatibility with Robot API revisions that wrap the actual job in an
+    // API-style { "success": true, "job": { ... } } envelope.
+    [JsonPropertyName("job")]
+    public VisionJobSummary? NestedJob { get; set; }
+
     [JsonPropertyName("job_id")]
     public string? JobId { get; set; }
 
@@ -192,6 +218,42 @@ public sealed class VisionClassificationResponse
 
     [JsonPropertyName("removed")]
     public int Removed { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public sealed class VisionCheckpointResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("duplicate")]
+    public bool Duplicate { get; set; }
+
+    [JsonPropertyName("trigger")]
+    public VisionDetection? Trigger { get; set; }
+
+    [JsonPropertyName("job")]
+    public VisionJobSummary? Job { get; set; }
+
+    [JsonPropertyName("queue_size")]
+    public int QueueSize { get; set; }
+
+    [JsonPropertyName("next_result")]
+    public VisionClassification? NextResult { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
+public sealed class RobotJobResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("job")]
+    public VisionJobSummary? Job { get; set; }
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }

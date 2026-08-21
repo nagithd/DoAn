@@ -31,6 +31,8 @@ public enum InspectionResultStatus
 /// </summary>
 public class InspectionResult
 {
+    public string InspectionId { get; set; } = "";
+
     public InspectionResultStatus Status { get; set; } =
         InspectionResultStatus.Waiting;
 

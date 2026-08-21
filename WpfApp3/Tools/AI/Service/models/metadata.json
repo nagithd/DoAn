@@ -1,0 +1,20 @@
+{
+  "name": "battery-defect-yolov8n-640",
+  "task": "detect",
+  "architecture": "YOLOv8n",
+  "image_size": 640,
+  "classes": {
+    "0": "Battery",
+    "1": "Dented",
+    "2": "Scratched",
+    "3": "Swollen"
+  },
+  "parameters": 3006428,
+  "model_size_bytes": 6244650,
+  "sha256": "50DD7D69BAD1CAEE3C20D41D3E921B950E457BD50DD7283984D37CF1C669F03B",
+  "best_epoch": 104,
+  "test_map50": 0.7818,
+  "test_map50_95": 0.5572,
+  "source_checkpoint": "Tools/AI/Service/models/best.pt",
+  "consolidated_at": "2026-08-20"
+}

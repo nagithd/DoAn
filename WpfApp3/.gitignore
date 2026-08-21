@@ -8,10 +8,20 @@ obj/
 
 # Optional local publish staging
 artifacts/
+build-check-*/
+
+# Non-runtime material is archived at D:\capstone\WpfApp3_NonRuntime
+Backups/
+Reports/
+TestResults/
+runs/
+Tools/Reports/
 
 # Python-generated cache files
 __pycache__/
 *.py[cod]
+Tools/AI/Service/.venv/
+Tools/AI/Service/.venv-minipc/
 
 # Ultralytics creates this local machine-specific settings file
 Ultralytics/settings.json

@@ -8,12 +8,13 @@
     <UseWPF>true</UseWPF>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <DefaultItemExcludes>
+      $(DefaultItemExcludes);Tools\AI\Service\.venv\**;Tools\AI\Service\.venv-minipc\**
+    </DefaultItemExcludes>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.2.2" />
-    <PackageReference Include="MaterialDesignThemes" Version="4.9.0" />
-    <PackageReference Include="MaterialDesignColors" Version="2.1.4" />
     <PackageReference Include="OpenCvSharp4" Version="4.10.0.20240615" />
     <PackageReference Include="OpenCvSharp4.runtime.win" Version="4.10.0.20240615" />
     <PackageReference Include="System.IO.Ports" Version="8.0.0" />
@@ -29,6 +30,17 @@
   <ItemGroup>
     <Folder Include="Enums\" />
     <Folder Include="Views\" />
+  </ItemGroup>
+
+  <!--
+    Backups are retained for rollback/reference only.  SDK-style projects
+    otherwise compile every *.cs and WPF *.xaml file below the project root,
+    which makes the snapshots conflict with the active implementation.
+  -->
+  <ItemGroup>
+    <Compile Remove="Backups\**\*.cs" />
+    <Page Remove="Backups\**\*.xaml" />
+    <ApplicationDefinition Remove="Backups\**\*.xaml" />
   </ItemGroup>
 
 </Project>

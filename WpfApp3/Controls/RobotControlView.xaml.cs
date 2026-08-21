@@ -9,6 +9,7 @@ namespace WpfApp3.Controls;
 public partial class RobotControlView : UserControl, IDisposable
 {
     private readonly RobotControlViewModel _viewModel;
+    public RobotControlViewModel ViewModel => _viewModel;
     private Slider? _activeServoSlider;
     private readonly Dictionary<int, double> _textEditStartAngles = new();
 

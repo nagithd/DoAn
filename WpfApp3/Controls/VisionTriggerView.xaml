@@ -5,288 +5,206 @@
              VerticalAlignment="Stretch">
     <UserControl.Resources>
         <Style x:Key="VisionTextBoxStyle" TargetType="TextBox">
-            <Setter Property="Background" Value="#1E1E1E"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="CaretBrush" Value="White"/>
-            <Setter Property="BorderBrush" Value="{DynamicResource BorderBrushColor}"/>
+            <Setter Property="Background" Value="{StaticResource SecondaryBackground}"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+            <Setter Property="CaretBrush" Value="{StaticResource PrimaryText}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}"/>
             <Setter Property="BorderThickness" Value="1"/>
-            <Setter Property="Padding" Value="8,4"/>
+            <Setter Property="Padding" Value="10,5"/>
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+
+        <Style x:Key="CompactStatusLabel" TargetType="TextBlock" BasedOn="{StaticResource LabelStyle}">
+            <Setter Property="FontSize" Value="18"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
+        </Style>
+
+        <Style x:Key="CompactStatusValue" TargetType="TextBlock" BasedOn="{StaticResource ValueStyle}">
+            <Setter Property="FontSize" Value="21"/>
+            <Setter Property="TextWrapping" Value="Wrap"/>
         </Style>
     </UserControl.Resources>
 
     <Grid Background="Transparent">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <Border Grid.Row="0" Style="{DynamicResource CardStyle}">
+        <!-- Connection, camera commands and health values share one compact strip. -->
+        <Border Grid.Row="0"
+                Style="{StaticResource CardStyle}"
+                Margin="0,0,0,12">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="DOFBOT camera / Vision API"
-                               Style="{DynamicResource CardTitleStyle}"/>
-                    <TextBlock Text="Jetson API address"
-                               Style="{DynamicResource LabelStyle}"/>
-                    <TextBox Text="{Binding RobotBaseUrl, UpdateSourceTrigger=PropertyChanged}"
-                             Style="{StaticResource VisionTextBoxStyle}"
-                             Height="34"
-                             Margin="0,4,12,0"/>
-                </StackPanel>
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="1"
-                            Orientation="Horizontal"
-                            VerticalAlignment="Bottom">
-                    <Button Content="Connect"
-                            Command="{Binding ConnectCommand}"
-                            Style="{DynamicResource PrimaryButton}"
-                            Width="100"
-                            Margin="0,0,8,0"/>
-                    <Button Content="Disconnect"
-                            Command="{Binding DisconnectCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="110"/>
-                </StackPanel>
+                    <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                        <TextBlock Text="Jetson monitor address"
+                                   Style="{StaticResource CompactStatusLabel}"/>
+                        <TextBox Text="{Binding RobotBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                                 Style="{StaticResource VisionTextBoxStyle}"
+                                 Height="42"
+                                 Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1"
+                                Orientation="Horizontal"
+                                VerticalAlignment="Bottom"
+                                Margin="0,0,12,0">
+                        <Button Content="Connect"
+                                Command="{Binding ConnectCommand}"
+                                Style="{StaticResource PrimaryButton}"
+                                Width="120"
+                                Margin="0,0,8,0"/>
+                        <Button Content="Disconnect"
+                                Command="{Binding DisconnectCommand}"
+                                Style="{StaticResource NeutralButton}"
+                                Width="145"/>
+                    </StackPanel>
+
+                </Grid>
+
+                <Grid Grid.Row="1" Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="1.1*"/>
+                        <ColumnDefinition Width="1.2*"/>
+                        <ColumnDefinition Width="1.8*"/>
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Grid.Column="0">
+                        <TextBlock Text="Connection" Style="{StaticResource CompactStatusLabel}"/>
+                        <TextBlock Text="{Binding ConnectionStatus}" Style="{StaticResource CompactStatusValue}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="1">
+                        <TextBlock Text="Vision running" Style="{StaticResource CompactStatusLabel}"/>
+                        <TextBlock Text="{Binding VisionRunning}" Style="{StaticResource CompactStatusValue}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="2">
+                        <TextBlock Text="Camera open" Style="{StaticResource CompactStatusLabel}"/>
+                        <TextBlock Text="{Binding CameraOpen}" Style="{StaticResource CompactStatusValue}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="3">
+                        <TextBlock Text="Frames processed" Style="{StaticResource CompactStatusLabel}"/>
+                        <TextBlock Text="{Binding FrameCount}" Style="{StaticResource CompactStatusValue}"/>
+                    </StackPanel>
+                    <StackPanel Grid.Column="4">
+                        <TextBlock Text="Processing mode" Style="{StaticResource CompactStatusLabel}"/>
+                        <TextBlock Text="TensorRT monitor-only"
+                                   Style="{StaticResource CompactStatusValue}"
+                                   Foreground="{StaticResource SuccessBrush}"/>
+                    </StackPanel>
+                </Grid>
             </Grid>
         </Border>
 
-        <Border Grid.Row="1" Style="{DynamicResource CardStyle}">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0">
-                    <TextBlock Text="Connection" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding ConnectionStatus}" Style="{DynamicResource ValueStyle}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="1">
-                    <TextBlock Text="Vision running" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding VisionRunning}" Style="{DynamicResource ValueStyle}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="2">
-                    <TextBlock Text="Camera open" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding CameraOpen}" Style="{DynamicResource ValueStyle}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="3">
-                    <TextBlock Text="Robot ready" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding RobotReady}" Style="{DynamicResource ValueStyle}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="4">
-                    <TextBlock Text="Auto trigger" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding AutomaticTriggerActive}" Style="{DynamicResource ValueStyle}"/>
-                </StackPanel>
-                <StackPanel Grid.Column="5">
-                    <TextBlock Text="Trigger latched" Style="{DynamicResource LabelStyle}"/>
-                    <TextBlock Text="{Binding TriggerLatched}" Style="{DynamicResource ValueStyle}"/>
-                </StackPanel>
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="2">
+        <!-- A responsive 60/40 split matches the small 4:3 DOFBOT camera better. -->
+        <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="3*"/>
                 <ColumnDefinition Width="2*"/>
-                <ColumnDefinition Width="360"/>
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0"
-                    Style="{DynamicResource CardStyle}"
+                    Style="{StaticResource CardStyle}"
                     Padding="0"
-                    Margin="0,0,12,12">
+                    Margin="0,0,12,0">
                 <Grid Background="#181818">
                     <TextBlock Text="Start vision monitoring to view the DOFBOT camera"
-                               Foreground="{DynamicResource HintText}"
-                               FontSize="15"
+                               Foreground="#FFE2E2E2"
+                               FontSize="24"
+                               TextWrapping="Wrap"
+                               TextAlignment="Center"
+                               Margin="30"
                                HorizontalAlignment="Center"
                                VerticalAlignment="Center"/>
                     <Image Source="{Binding RemoteFrame}"
                            Stretch="Uniform"
                            RenderOptions.BitmapScalingMode="HighQuality"/>
-
-                    <Border Background="#D91B1B1B"
-                            CornerRadius="4"
-                            Padding="8"
-                            Margin="12"
-                            HorizontalAlignment="Left"
-                            VerticalAlignment="Bottom">
-                        <StackPanel>
-                            <TextBlock Text="{Binding DetectionSummary}"
-                                       Foreground="{DynamicResource SuccessColor}"
-                                       FontWeight="SemiBold"/>
-                            <TextBlock Text="{Binding TriggerSummary}"
-                                       Foreground="{DynamicResource SecondaryText}"
-                                       Margin="0,3,0,0"/>
-                            <TextBlock Text="{Binding JobSummary}"
-                                       Foreground="{DynamicResource HintText}"
-                                       Margin="0,3,0,0"/>
-                            <TextBlock Text="{Binding RoutingSummary}"
-                                       Foreground="{DynamicResource WarningColor}"
-                                       Margin="0,3,0,0"/>
-                        </StackPanel>
-                    </Border>
                 </Grid>
             </Border>
 
             <Border Grid.Column="1"
-                    Style="{DynamicResource CardStyle}"
-                    Margin="0,0,0,12">
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <StackPanel>
-                        <TextBlock Text="AI result + trigger routing"
-                                   Style="{DynamicResource CardTitleStyle}"/>
-                        <TextBlock Text="FIFO keeps each IMITECH classification paired with the next battery detected by the DOFBOT camera."
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource HintText}"
-                                   Margin="0,0,0,12"/>
+                    Style="{StaticResource CardStyle}"
+                    Margin="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="Auto"/>
+                    </Grid.RowDefinitions>
 
-                        <TextBlock Text="The Windows AI service will enqueue one result per battery. These controls provide the same contract for integration testing."
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource HintText}"
-                                   FontSize="11"
-                                   Margin="0,0,0,8"/>
-                        <TextBlock Text="Test class" Style="{DynamicResource LabelStyle}"/>
-                        <ComboBox SelectedValue="{Binding SelectedTestClass}"
-                                  SelectedValuePath="Content"
-                                  Margin="0,3,0,6">
-                            <ComboBoxItem Content="dented"/>
-                            <ComboBoxItem Content="normal"/>
-                            <ComboBoxItem Content="scratched"/>
-                            <ComboBoxItem Content="swollen"/>
-                        </ComboBox>
-                        <TextBlock Text="Confidence (0..1)" Style="{DynamicResource LabelStyle}"/>
-                        <TextBox Text="{Binding TestConfidence, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource VisionTextBoxStyle}"
-                                 Margin="0,3,0,6"/>
-                        <Grid Margin="0,0,0,6">
+                    <TextBlock Grid.Row="0"
+                               Text="YOLO MONITOR"
+                               Style="{StaticResource CardTitleStyle}"/>
+
+                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+                        <StackPanel>
+                            <TextBlock Text="Latest detection"
+                                       Style="{StaticResource CompactStatusLabel}"
+                                       Margin="0,2,0,4"/>
+                            <TextBlock Text="{Binding DetectionSummary}"
+                                       TextWrapping="Wrap"
+                                       FontSize="24"
+                                       Foreground="{StaticResource SuccessBrush}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,0,0,12"/>
+                            <Separator Margin="0,0,0,12"/>
+                            <TextBlock Text="Preview camera in monitor-only mode"
+                                       FontSize="21"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource WarningBrush}"
+                                       FontWeight="SemiBold"/>
+                            <TextBlock Text="{Binding LastError, StringFormat=Last error: {0}}"
+                                       FontSize="21"
+                                       TextWrapping="Wrap"
+                                       Foreground="{StaticResource DangerBrush}"
+                                       Margin="0,12,0,0"/>
+                        </StackPanel>
+                    </ScrollViewer>
+
+                    <StackPanel Grid.Row="2" Margin="0,14,0,0">
+                        <Separator Margin="0,0,0,12"/>
+
+                        <Button Content="HOME ROBOT"
+                                Command="{Binding HomeCommand}"
+                                IsEnabled="{Binding IsConnected}"
+                                Style="{StaticResource NeutralButton}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,8"
+                                ToolTip="Move DOFBOT to the calibrated HOME pose. The Robot API rejects this request while a motion job is busy."/>
+
+                        <Grid>
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="8"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <Button Grid.Column="0"
-                                    Content="Enqueue test result"
-                                    Command="{Binding EnqueueTestClassificationCommand}"
-                                    Style="{DynamicResource SuccessButton}"/>
-                            <Button Grid.Column="2"
-                                    Content="Clear queue"
-                                    Command="{Binding ClearClassificationQueueCommand}"
-                                    Style="{DynamicResource NeutralButton}"/>
+                                    Content="Start camera"
+                                    Command="{Binding StartVisionCommand}"
+                                    Style="{StaticResource SuccessButton}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="0,0,5,0"/>
+                            <Button Grid.Column="1"
+                                    Content="Stop"
+                                    Command="{Binding StopVisionCommand}"
+                                    Style="{StaticResource DangerButton}"
+                                    HorizontalAlignment="Stretch"
+                                    Margin="5,0,0,0"/>
                         </Grid>
-                        <TextBlock Text="{Binding AiQueueSize, StringFormat=Queued results: {0}}"
-                                   Foreground="{DynamicResource SecondaryText}"/>
-                        <TextBlock Text="{Binding NextAiResult, StringFormat=Next: {0}}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource SuccessColor}"
-                                   Margin="0,2,0,6"/>
-                        <TextBlock Text="dented / scratched / swollen → robot pick; normal → PASS"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource WarningColor}"
-                                   FontSize="11"
-                                   Margin="0,0,0,12"/>
-
-                        <Separator Margin="0,0,0,10"/>
-                        <TextBlock Text="Trigger timing"
-                                   Style="{DynamicResource CardTitleStyle}"/>
-
-                        <TextBlock Text="Belt speed (mm/s)" Style="{DynamicResource LabelStyle}"/>
-                        <TextBox Text="{Binding BeltSpeedMmS, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource VisionTextBoxStyle}"
-                                 Margin="0,3,0,9"/>
-
-                        <TextBlock Text="Camera-to-pick distance (mm)" Style="{DynamicResource LabelStyle}"/>
-                        <TextBox Text="{Binding DistanceToPickMm, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource VisionTextBoxStyle}"
-                                 Margin="0,3,0,9"/>
-
-                        <TextBlock Text="Robot time to grip (ms)" Style="{DynamicResource LabelStyle}"/>
-                        <TextBox Text="{Binding RobotTimeToGripMs, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource VisionTextBoxStyle}"
-                                 Margin="0,3,0,9"/>
-
-                        <TextBlock Text="Processing margin (ms)" Style="{DynamicResource LabelStyle}"/>
-                        <TextBox Text="{Binding ProcessingMarginMs, UpdateSourceTrigger=LostFocus}"
-                                 Style="{StaticResource VisionTextBoxStyle}"
-                                 Margin="0,3,0,9"/>
-
-                        <CheckBox Content="Enable automatic robot trigger"
-                                  IsChecked="{Binding AutomaticTriggerRequested}"
-                                  Foreground="{DynamicResource DangerColor}"
-                                  FontWeight="SemiBold"
-                                  Margin="0,5,0,10"/>
-
-                        <Button Content="Apply timing and mode"
-                                Command="{Binding ApplyTimingConfigCommand}"
-                                Style="{DynamicResource PrimaryButton}"/>
-
-                        <TextBlock Text="{Binding TimingSummary}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource SecondaryText}"
-                                   Margin="0,12,0,0"/>
-                        <TextBlock Text="{Binding LastError, StringFormat=Last error: {0}}"
-                                   TextWrapping="Wrap"
-                                   Foreground="{DynamicResource DangerColor}"
-                                   Margin="0,8,0,0"/>
                     </StackPanel>
-                </ScrollViewer>
+                </Grid>
             </Border>
         </Grid>
-
-        <Border Grid.Row="3"
-                Style="{DynamicResource CardStyle}"
-                Margin="0">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-
-                <StackPanel Grid.Column="0" Orientation="Horizontal">
-                    <Button Content="VISION HOME"
-                            Command="{Binding VisionHomeCommand}"
-                            Style="{DynamicResource PrimaryButton}"
-                            Width="125"
-                            Margin="0,0,8,0"/>
-                    <Button Content="Start monitoring"
-                            Command="{Binding StartVisionCommand}"
-                            Style="{DynamicResource SuccessButton}"
-                            Width="130"
-                            Margin="0,0,8,0"/>
-                    <Button Content="Stop"
-                            Command="{Binding StopVisionCommand}"
-                            Style="{DynamicResource DangerButton}"
-                            Width="90"/>
-                </StackPanel>
-
-                <TextBlock Grid.Column="1"
-                           Text="{Binding FrameCount, StringFormat=Frames processed: {0}}"
-                           Style="{DynamicResource LabelStyle}"
-                           HorizontalAlignment="Center"
-                           VerticalAlignment="Center"/>
-
-                <StackPanel Grid.Column="2" Orientation="Horizontal">
-                    <TextBlock Text="{Binding StableCount, StringFormat=Stable frames: {0}}"
-                               Style="{DynamicResource LabelStyle}"
-                               VerticalAlignment="Center"
-                               Margin="0,0,12,0"/>
-                    <Button Content="Reset trigger"
-                            Command="{Binding ResetTriggerCommand}"
-                            Style="{DynamicResource NeutralButton}"
-                            Width="110"/>
-                </StackPanel>
-            </Grid>
-        </Border>
     </Grid>
 </UserControl>

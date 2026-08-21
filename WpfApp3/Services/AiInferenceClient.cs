@@ -59,25 +59,6 @@ public sealed class AiInferenceClient : IDisposable
                    "AI service returned an empty prediction response.");
     }
 
-    public async Task<AiZoneDetectionResponse> DetectZoneAsync(
-        byte[] jpegImage,
-        CancellationToken cancellationToken = default)
-    {
-        var request = new AiZoneDetectionRequest
-        {
-            ImageBase64 = Convert.ToBase64String(jpegImage)
-        };
-        using HttpResponseMessage response = await PostJsonAsync(
-            "detect-zone",
-            request,
-            cancellationToken);
-        response.EnsureSuccessStatusCode();
-        return await response.Content.ReadFromJsonAsync<AiZoneDetectionResponse>(
-                   cancellationToken: cancellationToken)
-               ?? throw new InvalidOperationException(
-                   "AI service returned an empty Capture Zone response.");
-    }
-
     private async Task<HttpResponseMessage> PostJsonAsync<T>(
         string endpoint,
         T request,
@@ -110,27 +91,6 @@ public sealed class AiPredictionRequest
     public string InspectionId { get; set; } = "";
 }
 
-public sealed class AiZoneDetectionRequest
-{
-    [JsonPropertyName("image_base64")]
-    public string ImageBase64 { get; set; } = "";
-}
-
-public sealed class AiZoneDetectionResponse
-{
-    [JsonPropertyName("battery_detected")]
-    public bool BatteryDetected { get; set; }
-
-    [JsonPropertyName("confidence")]
-    public double Confidence { get; set; }
-
-    [JsonPropertyName("detection_count")]
-    public int DetectionCount { get; set; }
-
-    [JsonPropertyName("inference_time_ms")]
-    public double InferenceTimeMs { get; set; }
-}
-
 public sealed class AiHealthResponse
 {
     [JsonPropertyName("status")]
@@ -142,6 +102,9 @@ public sealed class AiHealthResponse
 
 public sealed class AiPredictionResponse
 {
+    [JsonPropertyName("inspection_id")]
+    public string InspectionId { get; set; } = "";
+
     [JsonPropertyName("status")]
     public string Status { get; set; } = "";
 

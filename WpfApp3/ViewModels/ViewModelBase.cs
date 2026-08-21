@@ -1,29 +1,28 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace WpfApp3.ViewModels
+namespace WpfApp3.ViewModels;
+
+public abstract class ViewModelBase : INotifyPropertyChanged
 {
-    /// <summary>
-    /// Base class for all ViewModels implementing INotifyPropertyChanged
-    /// Provides property change notification infrastructure
-    /// </summary>
-    public abstract class ViewModelBase : INotifyPropertyChanged
+    public event PropertyChangedEventHandler? PropertyChanged;
+
+    protected virtual void OnPropertyChanged(
+        [CallerMemberName] string? propertyName = null) =>
+        PropertyChanged?.Invoke(
+            this,
+            new PropertyChangedEventArgs(propertyName));
+
+    protected bool SetProperty<T>(
+        ref T backingField,
+        T value,
+        [CallerMemberName] string? propertyName = null)
     {
-        public event PropertyChangedEventHandler? PropertyChanged;
+        if (EqualityComparer<T>.Default.Equals(backingField, value))
+            return false;
 
-        protected virtual void OnPropertyChanged([CallerMemberName] string? propertyName = null)
-        {
-            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
-        }
-
-        protected bool SetProperty<T>(ref T backingField, T value, [CallerMemberName] string? propertyName = null)
-        {
-            if (EqualityComparer<T>.Default.Equals(backingField, value))
-                return false;
-
-            backingField = value;
-            OnPropertyChanged(propertyName);
-            return true;
-        }
+        backingField = value;
+        OnPropertyChanged(propertyName);
+        return true;
     }
 }

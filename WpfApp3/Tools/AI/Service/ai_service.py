@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import logging
 import os
@@ -14,16 +13,34 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 
-import cv2
-import numpy as np
 from ultralytics import YOLO
 
 
-DEFAULT_MODEL = Path(
-    r"D:\capstone\AIService\runs\detect\finetune_battery_v2_20260804_232921\weights\best.pt"
-)
-EXPECTED_CLASSES = {0: "dented", 1: "battery", 2: "scratched", 3: "swollen"}
+SERVICE_ROOT = Path(__file__).resolve().parent
+DEFAULT_MODEL = SERVICE_ROOT / "models" / "best.pt"
+REQUIRED_CLASS_NAMES = frozenset({"dented", "battery", "scratched", "swollen"})
+CLASS_NAME_ALIASES = {
+    "scratch": "scratched",
+    "scratches": "scratched",
+}
 DEFECT_CLASSES = {"dented", "scratched", "swollen"}
+
+
+def normalize_model_classes(model_names: Any) -> dict[int, str]:
+    """Return model class IDs mapped to the canonical routing names."""
+    items = model_names.items() if hasattr(model_names, "items") else enumerate(model_names)
+    raw_names = {int(key): str(value) for key, value in items}
+    names = {
+        class_id: CLASS_NAME_ALIASES.get(name.strip().lower(), name.strip().lower())
+        for class_id, name in raw_names.items()
+    }
+    received_names = set(names.values())
+    if len(names) != len(REQUIRED_CLASS_NAMES) or received_names != REQUIRED_CLASS_NAMES:
+        raise ValueError(
+            "Incompatible model classes. Expected exactly the class names "
+            f"{sorted(REQUIRED_CLASS_NAMES)} in any ID order; received {raw_names}."
+        )
+    return names
 
 
 class InferenceEngine:
@@ -35,13 +52,7 @@ class InferenceEngine:
         self.image_size = image_size
         self.device = device
         self.model = YOLO(str(self.model_path))
-        names = {int(key): str(value).lower() for key, value in self.model.names.items()}
-        if names != EXPECTED_CLASSES:
-            raise ValueError(
-                "Incompatible model classes. Expected "
-                f"{EXPECTED_CLASSES}, received {names}."
-            )
-        self.names = names
+        self.names = normalize_model_classes(self.model.names)
         self.lock = threading.Lock()
 
     def predict(self, image_path: Path, inspection_id: str | None) -> dict[str, Any]:
@@ -58,10 +69,7 @@ class InferenceEngine:
                 conf=self.confidence,
                 iou=0.7,
                 device=self.device,
-                # Ultralytics reuses predictor arguments between calls. The
-                # Capture Zone endpoint restricts inference to class 1, so the
-                # full inspection must explicitly restore all four classes.
-                classes=[0, 1, 2, 3],
+                classes=sorted(self.names),
                 max_det=300,
                 verbose=False,
             )
@@ -136,42 +144,6 @@ class InferenceEngine:
             },
         }
 
-    def detect_zone(self, image_base64: str) -> dict[str, Any]:
-        try:
-            encoded = base64.b64decode(image_base64, validate=True)
-        except Exception as exc:
-            raise ValueError("image_base64 is not valid base64") from exc
-        frame = cv2.imdecode(np.frombuffer(encoded, dtype=np.uint8), cv2.IMREAD_COLOR)
-        if frame is None or frame.size == 0:
-            raise ValueError("image_base64 is not a valid image")
-
-        started = time.perf_counter()
-        with self.lock:
-            predictions = self.model.predict(
-                source=frame,
-                imgsz=640,
-                conf=max(0.35, self.confidence),
-                iou=0.7,
-                device=self.device,
-                classes=[1],
-                max_det=3,
-                verbose=False,
-            )
-        elapsed_ms = (time.perf_counter() - started) * 1000.0
-        result = predictions[0]
-        confidences = [] if result.boxes is None else [
-            float(box.conf.item()) for box in result.boxes
-        ]
-        best_confidence = max(confidences, default=0.0)
-        return {
-            "status": "ok",
-            "battery_detected": bool(confidences),
-            "confidence": best_confidence,
-            "detection_count": len(confidences),
-            "inference_time_ms": elapsed_ms,
-        }
-
-
 def make_handler(engine: InferenceEngine):
     class Handler(BaseHTTPRequestHandler):
         server_version = "BatteryAI/1.0"
@@ -208,17 +180,11 @@ def make_handler(engine: InferenceEngine):
 
         def do_POST(self) -> None:
             endpoint = self.path.rstrip("/")
-            if endpoint not in {"/predict", "/detect-zone"}:
+            if endpoint != "/predict":
                 self.send_json(HTTPStatus.NOT_FOUND, {"status": "error", "error": "not found"})
                 return
             try:
                 request = json.loads(self.read_request_body().decode("utf-8"))
-                if endpoint == "/detect-zone":
-                    image_base64 = str(request.get("image_base64", ""))
-                    if not image_base64:
-                        raise ValueError("image_base64 is required")
-                    self.send_json(HTTPStatus.OK, engine.detect_zone(image_base64))
-                    return
                 image_path = Path(str(request.get("image_path", "")))
                 if not str(image_path):
                     raise ValueError("image_path is required")
@@ -261,12 +227,14 @@ def make_handler(engine: InferenceEngine):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Local YOLO service for the WPF capture zone.")
+    parser = argparse.ArgumentParser(
+        description="Local YOLO service for Arduino-synchronized WPF captures."
+    )
     parser.add_argument("--model", type=Path, default=Path(os.environ.get("AI_MODEL_PATH", DEFAULT_MODEL)))
     parser.add_argument("--host", default=os.environ.get("AI_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("AI_PORT", "7100")))
     parser.add_argument("--conf", type=float, default=float(os.environ.get("AI_CONFIDENCE", "0.25")))
-    parser.add_argument("--imgsz", type=int, default=int(os.environ.get("AI_IMAGE_SIZE", "768")))
+    parser.add_argument("--imgsz", type=int, default=int(os.environ.get("AI_IMAGE_SIZE", "640")))
     parser.add_argument("--device", default=os.environ.get("AI_DEVICE", "cpu"))
     return parser.parse_args()
 

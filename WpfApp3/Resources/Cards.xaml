@@ -16,7 +16,7 @@
     <!-- Card Header Style -->
     <Style x:Key="CardHeaderStyle" TargetType="TextBlock">
         <Setter Property="Foreground" Value="#FFFFFF"/>
-        <Setter Property="FontSize" Value="14"/>
+        <Setter Property="FontSize" Value="24"/>
         <Setter Property="FontWeight" Value="Bold"/>
         <Setter Property="Margin" Value="0,0,0,12"/>
         <Setter Property="FontFamily" Value="Segoe UI"/>
@@ -47,6 +47,23 @@
         <Setter Property="Margin" Value="8,0,0,0"/>
         <Setter Property="BorderBrush" Value="#3E3E42"/>
         <Setter Property="BorderThickness" Value="0,0,0,1"/>
+    </Style>
+
+    <!-- Theme-aware card styles used throughout the HMI views -->
+    <Style x:Key="CardStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource CardBackground}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="14"/>
+        <Setter Property="Margin" Value="0,0,0,12"/>
+    </Style>
+
+    <Style x:Key="CardTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="25"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource SecondaryText}"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
     </Style>
 
 </ResourceDictionary>

@@ -13,38 +13,16 @@ namespace WpfApp3.Services;
 /// </summary>
 public static class SystemLogService
 {
-    private const int MaximumEntries = 500;
+    private const int MaximumSessionEntries = 500;
     private const long MaximumLogBytes = 5 * 1024 * 1024;
     private static readonly object FileLock = new();
 
-    public static ObservableCollection<string> Entries { get; } = [];
     public static ObservableCollection<string> SessionEntries { get; } = [];
     public static string LogFilePath { get; } = Path.Combine(
         Environment.GetFolderPath(
             Environment.SpecialFolder.LocalApplicationData),
         "WpfApp3",
         "system.log");
-
-    static SystemLogService()
-    {
-        try
-        {
-            if (!File.Exists(LogFilePath))
-                return;
-
-            foreach (string line in File
-                         .ReadLines(LogFilePath)
-                         .TakeLast(MaximumEntries))
-            {
-                Entries.Add(line);
-            }
-        }
-        catch (Exception ex)
-        {
-            Debug.WriteLine(
-                $"Cannot load application log: {ex.Message}");
-        }
-    }
 
     public static void Add(string source, string message)
     {
@@ -63,12 +41,8 @@ public static class SystemLogService
         // SessionEntries intentionally excludes lines restored from disk.
         // It is used by the workflow page to show only the current run.
         SessionEntries.Add(entry);
-        while (SessionEntries.Count > MaximumEntries)
+        while (SessionEntries.Count > MaximumSessionEntries)
             SessionEntries.RemoveAt(0);
-
-        Entries.Add(entry);
-        while (Entries.Count > MaximumEntries)
-            Entries.RemoveAt(0);
 
         WriteEntryToDisk(entry);
     }
@@ -82,7 +56,6 @@ public static class SystemLogService
         }
 
         SessionEntries.Clear();
-        Entries.Clear();
         try
         {
             lock (FileLock)

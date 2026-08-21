@@ -10,7 +10,9 @@ $ProjectRoot = $PSScriptRoot
 $CapstoneRoot = Split-Path (
     Split-Path $ProjectRoot -Parent
 ) -Parent
-$ReleaseRoot = Join-Path $CapstoneRoot "Releases\WpfApp3"
+$ReleaseRoot = Join-Path `
+    $CapstoneRoot `
+    "WpfApp3_NonRuntime\Releases\WpfApp3"
 $CurrentFolder = Join-Path $ReleaseRoot "current"
 $ArchiveFolder = Join-Path $ReleaseRoot "archive"
 $StagingFolder = Join-Path $ReleaseRoot ".staging"

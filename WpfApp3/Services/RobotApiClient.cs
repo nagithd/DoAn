@@ -53,32 +53,11 @@ public sealed class RobotApiClient : IDisposable
             },
             cancellationToken);
 
-    public Task<RobotCommandResponse> SetAllServosAsync(
-        IEnumerable<double> angles,
-        int moveTimeMs = 1000,
-        CancellationToken cancellationToken = default) =>
-        PostAsync<RobotCommandResponse>(
-            "robot/servos",
-            new
-            {
-                angles = angles.ToArray(),
-                move_time_ms = moveTimeMs
-            },
-            cancellationToken);
-
     public Task<RobotCommandResponse> HomeAsync(CancellationToken cancellationToken = default) =>
         PostAsync<RobotCommandResponse>("robot/home", new { }, cancellationToken);
 
-    public Task<RobotCommandResponse> VisionHomeAsync(CancellationToken cancellationToken = default) =>
-        PostAsync<RobotCommandResponse>("robot/vision-home", new { }, cancellationToken);
-
     public Task<RobotCommandResponse> ResetAsync(CancellationToken cancellationToken = default) =>
         PostAsync<RobotCommandResponse>("robot/reset", new { }, cancellationToken);
-
-    public Task<RobotCommandResponse> SetGripperAsync(
-        string action,
-        CancellationToken cancellationToken = default) =>
-        PostAsync<RobotCommandResponse>("robot/gripper", new { action }, cancellationToken);
 
     private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken)
     {

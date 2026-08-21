@@ -3,15 +3,19 @@
 This service matches the current deployment architecture:
 
 - Jetson login: `jetson`
-- Docker container: `kind_pare`
+- Dedicated Docker container: `dofbot_robot_api`
 - API inside container: `/root/robot_api.py`
 - Vision module inside container: `/root/vision_trigger.py`
 - HTTP port: `7000`
 
 ## Install from Windows
 
-First deploy the latest Python files using the existing
-`D:\capstone\Dofbot\deploy.ps1`.
+First deploy the latest Python files from the consolidated backend:
+
+```powershell
+Set-Location D:\capstone\WPF\WpfApp3\RobotApi\Jetson\Backend
+.\deploy.ps1
+```
 
 Then run:
 
@@ -25,7 +29,7 @@ it at boot and starts it immediately. SSH may ask for the Jetson login
 password and `sudo` may ask for it again.
 
 The service allows up to 300 seconds for Docker and the existing
-`kind_pare` container to become ready during a cold boot. It also passes
+`dofbot_robot_api` container to become ready during a cold boot. It also passes
 `TZ=Asia/Ho_Chi_Minh` into the API process so Python and systemd logs use
 the same timezone.
 

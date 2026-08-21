@@ -79,6 +79,30 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
             _liveMoveCancellation.Token);
     }
 
+    /// <summary>
+    /// Populates a static HOME state for report screenshots only.
+    /// No Robot API request or servo command is sent.
+    /// </summary>
+    public void LoadReportPlaceholder()
+    {
+        ConnectionStatus = "Connected";
+        RobotState = "HOME";
+        CurrentStep = "Ready";
+        LastError = "-";
+        IsConnected = true;
+        IsBusy = false;
+        MotionEnabled = true;
+        QueueSize = 0;
+
+        double[] homeAngles = [180, 130, 0, 0, 90, 40];
+        for (int index = 0; index < Servos.Count; index++)
+        {
+            Servos[index].CurrentAngle = homeAngles[index];
+            Servos[index].TargetAngle = homeAngles[index];
+            Servos[index].TargetInitialized = true;
+        }
+    }
+
     [RelayCommand]
     private async Task ConnectAsync()
     {
@@ -121,6 +145,12 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
         AddLog("Đã ngắt theo dõi Robot API.");
     }
 
+    public void StopMonitoringForSystem()
+    {
+        if (IsConnected || _pollingCancellation != null)
+            Disconnect();
+    }
+
     [RelayCommand]
     private async Task RefreshAsync()
     {
@@ -129,7 +159,9 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
 
         try
         {
-            await RefreshRobotDataAsync(CancellationToken.None);
+            await RefreshRobotDataAsync(
+                CancellationToken.None,
+                includeServoFeedback: true);
         }
         catch (Exception ex)
         {
@@ -151,7 +183,9 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
                 servo.ServoId,
                 target,
                 Math.Clamp(ServoMoveTimeMs, 100, 5000));
-            await RefreshRobotDataAsync(CancellationToken.None);
+            await RefreshRobotDataAsync(
+                CancellationToken.None,
+                includeServoFeedback: true);
         }
         catch (Exception ex)
         {
@@ -187,52 +221,7 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
         _activeServoIds.Remove(servoId);
 
     [RelayCommand]
-    private async Task ApplyAllAsync()
-    {
-        if (!EnsureReady())
-            return;
-
-        try
-        {
-            double[] angles = Servos
-                .Select(servo => Math.Clamp(Math.Round(servo.TargetAngle, 1), 0, 180))
-                .ToArray();
-            AddLog($"Di chuyển 6 servo → [{string.Join(", ", angles)}]");
-            await _robotApi.SetAllServosAsync(
-                angles,
-                Math.Clamp(ServoMoveTimeMs * 2, 200, 5000));
-            await RefreshRobotDataAsync(CancellationToken.None);
-        }
-        catch (Exception ex)
-        {
-            HandleCommandError(ex);
-        }
-    }
-
-    [RelayCommand]
-    private void CopyCurrentToTargets()
-    {
-        foreach (ServoChannelViewModel servo in Servos)
-            servo.TargetAngle = servo.CurrentAngle;
-        AddLog("Đã sao chép góc thực tế sang góc đặt.");
-    }
-
-    [RelayCommand]
     private Task HomeAsync() => ExecuteSimpleCommandAsync("Đưa robot về HOME", _robotApi.HomeAsync);
-
-    [RelayCommand]
-    private Task VisionHomeAsync() =>
-        ExecuteSimpleCommandAsync(
-            "Đưa robot về VISION_HOME",
-            _robotApi.VisionHomeAsync);
-
-    [RelayCommand]
-    private Task OpenGripperAsync() =>
-        ExecuteSimpleCommandAsync("Mở kẹp", token => _robotApi.SetGripperAsync("open", token));
-
-    [RelayCommand]
-    private Task CloseGripperAsync() =>
-        ExecuteSimpleCommandAsync("Đóng kẹp", token => _robotApi.SetGripperAsync("close", token));
 
     [RelayCommand]
     private Task ResetAsync() => ExecuteSimpleCommandAsync("Reset robot", _robotApi.ResetAsync);
@@ -251,7 +240,9 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
         {
             AddLog(description);
             await action(CancellationToken.None);
-            await RefreshRobotDataAsync(CancellationToken.None);
+            await RefreshRobotDataAsync(
+                CancellationToken.None,
+                includeServoFeedback: true);
         }
         catch (Exception ex)
         {
@@ -408,16 +399,30 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
         }
     }
 
-    private async Task RefreshRobotDataAsync(CancellationToken cancellationToken)
+    private async Task RefreshRobotDataAsync(
+        CancellationToken cancellationToken,
+        bool includeServoFeedback = false)
     {
-        var statusTask = _robotApi.GetStatusAsync(cancellationToken);
-        var servosTask = _robotApi.GetServosAsync(cancellationToken);
-        await Task.WhenAll(statusTask, servosTask);
+        // Status is lightweight and remains available once per second.
+        // Servo feedback touches the physical I2C bus and is intentionally
+        // excluded from the periodic poll. It is read only on initial/manual
+        // refresh and after an explicit robot command.
+        var statusResponse =
+            await _robotApi.GetStatusAsync(cancellationToken);
+        var status = statusResponse.EffectiveState;
 
-        var status = (await statusTask).EffectiveState;
-        var servoResponse = await servosTask;
-        if (!servoResponse.Success)
-            throw new InvalidOperationException(servoResponse.Error ?? "Không đọc được góc servo.");
+        RobotServosResponse? servoResponse = null;
+        if (includeServoFeedback && !status.Busy)
+        {
+            servoResponse =
+                await _robotApi.GetServosAsync(cancellationToken);
+            if (!servoResponse.Success)
+            {
+                throw new InvalidOperationException(
+                    servoResponse.Error ??
+                    "Không đọc được góc servo.");
+            }
+        }
 
         await Application.Current.Dispatcher.InvokeAsync(() =>
         {
@@ -427,6 +432,9 @@ public partial class RobotControlViewModel : ObservableObject, IDisposable
             LastError = status.LastError ?? "-";
             MotionEnabled = status.MotionEnabled;
             QueueSize = status.QueueSize;
+
+            if (servoResponse == null)
+                return;
 
             for (int index = 0; index < Servos.Count && index < servoResponse.Servos.Count; index++)
             {

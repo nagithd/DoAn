@@ -9,7 +9,7 @@ public sealed class VisionApiClient : IDisposable
 {
     private readonly HttpClient _httpClient = new()
     {
-        Timeout = TimeSpan.FromSeconds(5)
+        Timeout = TimeSpan.FromSeconds(10)
     };
     private Uri? _baseUri;
 
@@ -61,10 +61,10 @@ public sealed class VisionApiClient : IDisposable
             new { },
             cancellationToken);
 
-    public Task<RobotCommandResponse> VisionHomeAsync(
+    public Task<RobotCommandResponse> HomeAsync(
         CancellationToken cancellationToken = default) =>
         PostAsync<RobotCommandResponse>(
-            "robot/vision-home",
+            "robot/home",
             new { },
             cancellationToken);
 
@@ -88,7 +88,40 @@ public sealed class VisionApiClient : IDisposable
                 class_name = className,
                 confidence,
                 inspection_id = inspectionId ?? Guid.NewGuid().ToString(),
-                source = "wpf_test"
+                source = "windows_ai"
+            },
+            cancellationToken);
+
+    public Task<RobotJobResponse> GetRobotJobAsync(
+        string jobId,
+        CancellationToken cancellationToken = default) =>
+        GetAsync<RobotJobResponse>(
+            $"robot/jobs/{Uri.EscapeDataString(jobId)}",
+            cancellationToken);
+
+    public Task<RobotStatusResponse> GetRobotStatusAsync(
+        CancellationToken cancellationToken = default) =>
+        GetAsync<RobotStatusResponse>(
+            "robot/status",
+            cancellationToken);
+
+    public Task<RobotJobResponse> SendDirectPickAsync(
+        string className,
+        string inspectionId,
+        CancellationToken cancellationToken = default) =>
+        PostAsync<RobotJobResponse>(
+            "robot/pick",
+            new
+            {
+                class_name = className,
+                job_id = inspectionId,
+                wrist_angle = (double?)null,
+                start_delay_ms = 0,
+                // The checkpoint caller verifies vision_ready before posting.
+                // The backend can therefore skip duplicate HOME, gripper-open
+                // and PICK_ABOVE commands and move directly to PICK_DOWN.
+                prepositioned = true,
+                source = "arduino_checkpoint"
             },
             cancellationToken);
 
