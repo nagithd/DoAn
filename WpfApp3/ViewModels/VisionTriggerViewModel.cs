@@ -11,14 +11,18 @@ namespace WpfApp3.ViewModels;
 
 public partial class VisionTriggerViewModel : ObservableObject, IDisposable
 {
-    private readonly VisionApiClient _visionApi = new();
-    private readonly DispatcherTimer _pollTimer;
+    private readonly VisionApiClient _visionApi;
+    private const int StatusPollIntervalMs = 1000;
+    private const int PreviewReconnectDelayMs = 500;
+
+    private readonly DispatcherTimer _statusPollTimer;
     private bool _refreshInProgress;
-    private bool _configInitialized;
+    private CancellationTokenSource? _previewStreamCancellation;
+    private Task? _previewStreamTask;
     private bool _disposed;
     private int _consecutiveRefreshFailures;
-    private string? _lastLoggedRoutingKey;
     private InspectionResult? _pendingDirectInspection;
+    private string? _inspectionCycleId;
     private bool _checkpointInProgress;
     private const int MaximumRefreshFailures = 3;
 
@@ -38,22 +42,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     private bool cameraOpen;
 
     [ObservableProperty]
-    private bool robotReady;
-
-    [ObservableProperty]
-    private bool automaticTriggerActive;
-
-    [ObservableProperty]
-    private bool automaticTriggerRequested;
-
-    [ObservableProperty]
-    private bool triggerLatched;
-
-    [ObservableProperty]
     private long frameCount;
-
-    [ObservableProperty]
-    private int stableCount;
 
     [ObservableProperty]
     private BitmapSource? remoteFrame;
@@ -62,52 +51,18 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     private string detectionSummary = "No object in the entry zone";
 
     [ObservableProperty]
-    private string triggerSummary = "No trigger recorded";
-
-    [ObservableProperty]
-    private string jobSummary = "No vision job";
-
-    [ObservableProperty]
-    private string timingSummary = "Timing is not available";
-
-    [ObservableProperty]
     private string lastError = "-";
 
-    [ObservableProperty]
-    private double beltSpeedMmS = 40;
-
-    [ObservableProperty]
-    private string selectedTestClass = "normal";
-
-    [ObservableProperty]
-    private double testConfidence = 0.90;
-
-    [ObservableProperty]
-    private int aiQueueSize;
-
-    [ObservableProperty]
-    private string nextAiResult = "Queue empty";
-
-    [ObservableProperty]
-    private string routingSummary = "No routing action";
-
-    [ObservableProperty]
-    private double distanceToPickMm = 200;
-
-    [ObservableProperty]
-    private int robotTimeToGripMs = 4150;
-
-    [ObservableProperty]
-    private int processingMarginMs = 350;
-
-    public VisionTriggerViewModel()
+    public VisionTriggerViewModel(VisionApiClient? visionApi = null)
     {
-        _pollTimer = new DispatcherTimer
+        _visionApi = visionApi ?? new VisionApiClient();
+        _statusPollTimer = new DispatcherTimer
         {
-            Interval = TimeSpan.FromSeconds(1)
+            Interval = TimeSpan.FromMilliseconds(StatusPollIntervalMs)
         };
-        _pollTimer.Tick += async (_, _) =>
-            await RefreshStatusAsync(includeFrame: true);
+        _statusPollTimer.Tick += async (_, _) =>
+            await RefreshStatusAsync();
+
     }
 
     /// <summary>
@@ -121,18 +76,8 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         IsConnected = true;
         VisionRunning = true;
         CameraOpen = true;
-        RobotReady = true;
-        AutomaticTriggerActive = false;
-        AutomaticTriggerRequested = false;
-        TriggerLatched = false;
         FrameCount = 12840;
-        StableCount = 0;
         DetectionSummary = "Battery detected inside the checkpoint zone";
-        TriggerSummary = "Arduino checkpoint signal ready";
-        JobSummary = "No active robot job";
-        RoutingSummary = "scratched -> direct fixed-pose pick";
-        NextAiResult = "scratched (84.0%) waiting for Arduino checkpoint";
-        AiQueueSize = 0;
         LastError = "-";
     }
 
@@ -141,37 +86,39 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     /// Vision API: Arduino decides when the battery reaches the robot and WPF
     /// then sends one direct /robot/pick command to Jetson.
     /// </summary>
-    public void StoreDirectInspectionResult(InspectionResult result)
+    public void ClearDirectInspection()
+    {
+        _pendingDirectInspection = null;
+        _inspectionCycleId = null;
+    }
+
+    public bool StoreDirectInspectionResult(InspectionResult result, string cycleId)
     {
         string className = result.DetectedClass.Trim().ToLowerInvariant();
         if (className is not ("normal" or "dented" or "scratched" or "swollen"))
         {
             _pendingDirectInspection = null;
-            NextAiResult = "No routable AI result";
             SystemLogService.Add(
                 "AI ROUTING",
                 $"Unsupported AI class '{className}'; no robot signal will be sent.");
-            return;
+            return false;
         }
 
         _pendingDirectInspection = result;
-        NextAiResult = $"{className} ({result.Confidence:P1}) waiting for Arduino checkpoint";
-        RoutingSummary = className == "normal"
-            ? "NORMAL -> conveyor pass"
-            : $"{className} -> direct fixed-pose pick";
+        _inspectionCycleId = cycleId;
 
         SystemLogService.Add(
             "AI ROUTING",
             $"Stored {className} ({result.Confidence:P1}) locally; " +
             "waiting for EVENT:ROBOT_STOPPED.");
 
-        if (result.Confidence < 0.40)
+        if (!double.IsFinite(result.Confidence) || result.Confidence < 0.40 || result.Confidence > 1)
         {
-            SystemLogService.Add(
-                "AI ROUTING",
-                "Low-confidence result will still use the selected class in " +
-                "the simplified open-loop test mode.");
+            ClearDirectInspection();
+            SystemLogService.Add("SAFETY", "AI confidence below 0.40; conveyor will remain stopped.");
+            return false;
         }
+        return true;
     }
 
     public async Task<bool> PrepareRobotForSystemStartAsync(
@@ -180,13 +127,26 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         try
         {
             _visionApi.Configure(RobotBaseUrl);
+            RobotHealthResponse health = await _visionApi.GetHealthAsync(cancellationToken);
+            if (health.ConveyorHandshakeVersion != 1)
+                throw new InvalidOperationException("Deploy the Jetson handshake backend before starting the conveyor.");
+            if (health.ServoFeedbackAvailable is not true)
+            {
+                SystemLogService.Add(
+                    "ROBOT",
+                    "Servo feedback is unavailable; pose completion is currently based on commanded state.");
+            }
+            if (health.PickGuardEnabled)
+            {
+                ApplyStatus(await _visionApi.StartAsync(cancellationToken));
+                IsConnected = true;
+            }
             RobotStatusResponse response =
                 await _visionApi.GetRobotStatusAsync(cancellationToken);
             RobotStatusResponse robot = response.EffectiveState;
 
             if (!robot.MotionEnabled || robot.Busy || robot.QueueSize > 0)
             {
-                RobotReady = false;
                 LastError = $"Robot state: {robot.State}; busy={robot.Busy}; " +
                     $"queue={robot.QueueSize}; motion={robot.MotionEnabled}";
                 SystemLogService.Add(
@@ -201,7 +161,6 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                     "vision_ready",
                     StringComparison.OrdinalIgnoreCase))
             {
-                RobotReady = true;
                 LastError = "-";
                 SystemLogService.Add(
                     "ROBOT",
@@ -214,7 +173,6 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                     "idle",
                     StringComparison.OrdinalIgnoreCase))
             {
-                RobotReady = false;
                 LastError = $"Robot state: {robot.State}";
                 SystemLogService.Add(
                     "SAFETY",
@@ -246,7 +204,6 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                     "vision_ready",
                     StringComparison.OrdinalIgnoreCase);
 
-            RobotReady = ready;
             LastError = ready
                 ? "-"
                 : $"Robot state: {robot.State}; busy={robot.Busy}; " +
@@ -262,7 +219,6 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         }
         catch (Exception ex)
         {
-            RobotReady = false;
             LastError = ex.Message;
             SystemLogService.Add(
                 "SAFETY",
@@ -279,7 +235,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     public async Task StopForSystemAsync(
         CancellationToken cancellationToken = default)
     {
-        _pollTimer.Stop();
+        StopPolling();
 
         if (IsConnected && VisionRunning)
         {
@@ -315,10 +271,11 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     /// <summary>
     /// Called only after Arduino confirms that the conveyor is stopped at the
     /// robot. Defects produce one direct Robot API command; normal batteries
-    /// produce no motion. Arduino owns the checkpoint dwell and conveyor
-    /// restart, so WPF neither waits for job completion nor sends robot_done@.
+    /// produce no motion. The caller may release the matching Arduino cycle
+    /// only after this method confirms job completion and HOME readiness.
     /// </summary>
     public async Task<bool> TriggerAtRobotCheckpointAsync(
+        string cycleId,
         CancellationToken cancellationToken = default)
     {
         if (_checkpointInProgress)
@@ -333,22 +290,13 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         try
         {
             InspectionResult? inspection = _pendingDirectInspection;
-            if (inspection is null)
+            if (inspection is null || _inspectionCycleId != cycleId)
             {
                 throw new InvalidOperationException(
                     "No local AI result is waiting for the Arduino robot checkpoint.");
             }
 
             string className = inspection.DetectedClass.Trim().ToLowerInvariant();
-            if (className == "normal")
-            {
-                SystemLogService.Add(
-                    "AI ROUTING",
-                    "NORMAL -> PASS. No robot command was sent.");
-                CompleteArduinoControlledCheckpoint(inspection);
-                return true;
-            }
-
             _visionApi.Configure(RobotBaseUrl);
             RobotStatusResponse statusResponse =
                 await _visionApi.GetRobotStatusAsync(cancellationToken);
@@ -364,7 +312,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
             {
                 throw new InvalidOperationException(
                     "DOFBOT is busy or has a queued job. No new pick was sent; " +
-                    "Arduino will continue its programmed cycle.");
+                    "Arduino remains stopped.");
             }
 
             if (!string.Equals(
@@ -382,16 +330,21 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 "DOFBOT state confirmed as vision_ready; skipping duplicate " +
                 "HOME, gripper-open and PICK_ABOVE commands.");
 
-            string inspectionId = string.IsNullOrWhiteSpace(inspection.InspectionId)
-                ? Guid.NewGuid().ToString("N")
-                : inspection.InspectionId;
+            if (className == "normal")
+            {
+                SystemLogService.Add("AI ROUTING", "NORMAL -> PASS with robot ready.");
+                CompleteCheckpoint(inspection);
+                return true;
+            }
+
+            string inspectionId = "conveyor-" + cycleId.Replace(':', '-');
             RobotJobResponse response = await _visionApi.SendDirectPickAsync(
                 className,
                 inspectionId,
                 cancellationToken);
 
             VisionJobSummary? job = response.Job?.NestedJob ?? response.Job;
-            if (string.IsNullOrWhiteSpace(job?.JobId))
+            if (!response.Success || job?.JobId != inspectionId)
             {
                 throw new InvalidOperationException(
                     response.Error ?? "Robot API did not accept the direct pick signal.");
@@ -402,10 +355,31 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 "ROBOT",
                 $"Arduino checkpoint -> direct {className} pick accepted " +
                 $"(job {jobId[..Math.Min(8, jobId.Length)]}). " +
-                "WPF will not wait or send robot_done@; Arduino controls " +
-                "checkpoint timing and conveyor restart.");
+                "Conveyor remains held until this exact job completes.");
 
-            CompleteArduinoControlledCheckpoint(inspection);
+            using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            deadline.CancelAfter(TimeSpan.FromSeconds(100));
+            while (true)
+            {
+                await Task.Delay(300, deadline.Token);
+                var progress = await _visionApi.GetJobAsync(jobId, deadline.Token);
+                var current = progress.Job?.NestedJob ?? progress.Job;
+                if (!progress.Success || current?.JobId != jobId)
+                    throw new InvalidOperationException("Robot job response does not match the active cycle.");
+                if (current.Status == "error")
+                    throw new InvalidOperationException(current.Error ?? "Robot job failed.");
+                if (current.Status != "completed") continue;
+                if (!current.ConveyorReleaseAllowed)
+                    throw new InvalidOperationException("Job completed without conveyor release permission.");
+                var finalState = (await _visionApi.GetRobotStatusAsync(deadline.Token)).EffectiveState;
+                if (finalState.Busy || finalState.QueueSize != 0 || !finalState.MotionEnabled ||
+                    finalState.State != "vision_ready")
+                    throw new InvalidOperationException("Robot is not ready at the end of the job.");
+                SystemLogService.Add("ROBOT", $"Completed {jobId}; HOME confirmation: {current.PoseConfirmation}.");
+                break;
+            }
+
+            CompleteCheckpoint(inspection);
             return true;
         }
         catch (Exception ex)
@@ -413,8 +387,8 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
             LastError = ex.Message;
             SystemLogService.Add(
                 "SAFETY",
-                "Checkpoint routing failed. No robot job was submitted; " +
-                "Arduino may still continue its programmed cycle. Operator " +
+                "Checkpoint failed or completion is uncertain. A submitted robot job may still be moving; " +
+                "Arduino must remain stopped. Operator " +
                 $"inspection is required: {ex.Message}");
             return false;
         }
@@ -424,19 +398,14 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
-    private async Task RetryCheckpointAsync() =>
-        await TriggerAtRobotCheckpointAsync();
-
-    private void CompleteArduinoControlledCheckpoint(
+    private void CompleteCheckpoint(
         InspectionResult processedInspection)
     {
         if (ReferenceEquals(
                 _pendingDirectInspection,
                 processedInspection))
         {
-            _pendingDirectInspection = null;
-            NextAiResult = "No AI result waiting";
+            ClearDirectInspection();
         }
         else
         {
@@ -448,8 +417,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
 
         SystemLogService.Add(
             "AI ROUTING",
-            "WPF checkpoint handling finished. Arduino independently " +
-            "controls conveyor restart; no robot_done@ was transmitted.");
+            "Checkpoint validated. Caller may now acknowledge this cycle to Arduino.");
     }
 
     [RelayCommand]
@@ -457,7 +425,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     {
         try
         {
-            _pollTimer.Stop();
+            StopPolling();
             _consecutiveRefreshFailures = 0;
             ConnectionStatus = "Connecting...";
             _visionApi.Configure(RobotBaseUrl);
@@ -465,8 +433,8 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 await _visionApi.GetStatusAsync();
             IsConnected = true;
             ConnectionStatus = "Connected";
-            ApplyStatus(status, initializeConfig: true);
-            _pollTimer.Start();
+            ApplyStatus(status);
+            StartPolling();
             SystemLogService.Add(
                 "DOFBOT CAM",
                 "Connected to Vision API.");
@@ -480,7 +448,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void Disconnect()
     {
-        _pollTimer.Stop();
+        StopPolling();
         IsConnected = false;
         ConnectionStatus = "Disconnected";
         RemoteFrame = null;
@@ -488,10 +456,6 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
             "DOFBOT CAM",
             "Stopped monitoring Vision API.");
     }
-
-    [RelayCommand]
-    private async Task RefreshAsync() =>
-        await RefreshStatusAsync(includeFrame: true);
 
     [RelayCommand]
     private async Task StartVisionAsync()
@@ -504,12 +468,11 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
             VisionStatusResponse status =
                 await _visionApi.StartAsync();
             ApplyStatus(status);
+            StartPolling();
             SystemLogService.Add(
                 "DOFBOT CAM",
-                AutomaticTriggerActive
-                    ? "Vision started in AUTO mode."
-                    : "DOFBOT camera preview started in CHECKPOINT mode. " +
-                      "Automatic robot routing is controlled by Arduino.");
+                "DOFBOT camera and TensorRT monitoring started. " +
+                "Automatic robot routing remains controlled by Arduino.");
         }
         catch (Exception ex)
         {
@@ -540,27 +503,6 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
     }
 
     [RelayCommand]
-    private async Task ResetTriggerAsync()
-    {
-        if (!EnsureConnected())
-            return;
-
-        try
-        {
-            VisionStatusResponse status =
-                await _visionApi.ResetTriggerAsync();
-            ApplyStatus(status);
-            SystemLogService.Add(
-                "DOFBOT CAM",
-                "Trigger latch reset.");
-        }
-        catch (Exception ex)
-        {
-            HandleCommandError(ex);
-        }
-    }
-
-    [RelayCommand]
     private async Task HomeAsync()
     {
         if (!EnsureConnected())
@@ -579,7 +521,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                     response.Error ?? "HOME failed.");
             }
 
-            await RefreshStatusAsync(includeFrame: false);
+            await RefreshStatusAsync();
         }
         catch (Exception ex)
         {
@@ -587,89 +529,21 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         }
     }
 
-    [RelayCommand]
-    private async Task ApplyTimingConfigAsync()
+    private void StartPolling()
     {
-        if (!EnsureConnected())
-            return;
-
-        try
-        {
-            var config = new VisionConfig
-            {
-                BeltSpeedMmS = Math.Max(0, BeltSpeedMmS),
-                DistanceToPickMm = Math.Max(0, DistanceToPickMm),
-                RobotTimeToGripMs = Math.Max(0, RobotTimeToGripMs),
-                ProcessingMarginMs = Math.Max(0, ProcessingMarginMs),
-                AutoTrigger = AutomaticTriggerRequested
-            };
-
-            VisionConfigResponse response =
-                await _visionApi.UpdateConfigAsync(config);
-            ApplyConfig(response.Config);
-            SystemLogService.Add(
-                "DOFBOT CAM",
-                AutomaticTriggerActive
-                    ? "Timing saved; AUTO trigger is enabled."
-                    : "Timing saved; Arduino CHECKPOINT mode remains active.");
-            await RefreshStatusAsync(includeFrame: false);
-        }
-        catch (Exception ex)
-        {
-            HandleCommandError(ex);
-        }
+        _statusPollTimer.Start();
+        StartPreviewStream();
     }
 
-    [RelayCommand]
-    private async Task EnqueueTestClassificationAsync()
+    private void StopPolling()
     {
-        if (!EnsureConnected())
-            return;
-
-        try
-        {
-            string className = SelectedTestClass.Trim().ToLowerInvariant();
-            double confidence = Math.Clamp(TestConfidence, 0, 1);
-            VisionClassificationResponse response =
-                await _visionApi.SubmitClassificationAsync(
-                    className,
-                    confidence);
-            AiQueueSize = response.QueueSize;
-            ApplyNextClassification(response.NextResult);
-            SystemLogService.Add(
-                "AI ROUTING",
-                $"Queued {className} ({confidence:P1}) for DOFBOT trigger.");
-            await RefreshStatusAsync(includeFrame: false);
-        }
-        catch (Exception ex)
-        {
-            HandleCommandError(ex);
-        }
+        _statusPollTimer.Stop();
+        _previewStreamCancellation?.Cancel();
+        _previewStreamCancellation = null;
+        _previewStreamTask = null;
     }
 
-    [RelayCommand]
-    private async Task ClearClassificationQueueAsync()
-    {
-        if (!EnsureConnected())
-            return;
-
-        try
-        {
-            VisionClassificationResponse response =
-                await _visionApi.ClearClassificationsAsync();
-            AiQueueSize = response.QueueSize;
-            ApplyNextClassification(response.NextResult);
-            SystemLogService.Add(
-                "AI ROUTING",
-                $"Cleared classification queue ({response.Removed} removed).");
-        }
-        catch (Exception ex)
-        {
-            HandleCommandError(ex);
-        }
-    }
-
-    private async Task RefreshStatusAsync(bool includeFrame)
+    private async Task RefreshStatusAsync()
     {
         if (!IsConnected || _refreshInProgress)
             return;
@@ -691,21 +565,8 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                     "Vision API connection recovered.");
             }
 
-            if (includeFrame &&
-                status.Running &&
-                status.CameraOpen)
-            {
-                try
-                {
-                    byte[] jpeg =
-                        await _visionApi.GetLatestFrameAsync();
-                    RemoteFrame = CreateBitmap(jpeg);
-                }
-                catch (HttpRequestException)
-                {
-                    // A 503 is normal during camera warm-up.
-                }
-            }
+            StartPreviewStream();
+
         }
         catch (Exception ex)
         {
@@ -733,29 +594,17 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         }
     }
 
-    private void ApplyStatus(
-        VisionStatusResponse status,
-        bool initializeConfig = false)
+    private void ApplyStatus(VisionStatusResponse status)
     {
         VisionRunning = status.Running;
         CameraOpen = status.CameraOpen;
-        RobotReady = status.RobotReady;
-        AutomaticTriggerActive = status.AutoTrigger;
-        TriggerLatched = status.TriggerLatched;
         FrameCount = status.FrameCount;
-        StableCount = status.StableCount;
         LastError = status.LastError ?? "-";
-        AiQueueSize = status.ClassificationQueue?.QueueSize ?? 0;
-        ApplyNextClassification(
-            status.ClassificationQueue?.NextResult);
 
         if (!status.VisionProcessingEnabled && status.CameraOpen)
         {
             DetectionSummary =
                 "Vision processing disabled • raw DOFBOT camera preview only";
-            TriggerSummary = "Vision trigger disabled";
-            TriggerLatched = false;
-            StableCount = 0;
         }
         else if (status.LastDetection is { } detection)
         {
@@ -784,100 +633,59 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
                 ? "No battery detected in the entry zone • TensorRT MONITOR ONLY"
                 : "No object in the entry zone";
         }
+    }
 
-        if (!status.VisionProcessingEnabled)
+    private void StartPreviewStream()
+    {
+        if (!IsConnected || !VisionRunning || !CameraOpen ||
+            _previewStreamTask is { IsCompleted: false })
         {
-            TriggerSummary = "Vision trigger disabled";
+            return;
         }
-        else if (status.LastTrigger is { } trigger)
-        {
-            TriggerSummary =
-                $"{trigger.ClassName ?? "unclassified"}  •  " +
-                (trigger.Confidence is null
-                    ? ""
-                    : $"{trigger.Confidence:P1}  •  ") +
-                (string.IsNullOrWhiteSpace(trigger.Action)
-                    ? ""
-                    : $"{trigger.Action}  •  ") +
-                (trigger.WristAngle is null
-                    ? "servo 5 from fixed pose  •  "
-                    : $"servo 5 {trigger.WristAngle:0.0}°  •  ") +
-                $"delay {trigger.StartDelayMs} ms" +
-                (trigger.Late ? "  •  LATE" : "");
 
-            string routingKey =
-                $"{trigger.InspectionId}:{status.AutoTrigger}";
-            if (!string.IsNullOrWhiteSpace(trigger.InspectionId) &&
-                routingKey != _lastLoggedRoutingKey)
+        _previewStreamCancellation?.Cancel();
+        var cancellation = new CancellationTokenSource();
+        _previewStreamCancellation = cancellation;
+        _previewStreamTask = ReceivePreviewStreamAsync(cancellation.Token);
+    }
+
+    private async Task ReceivePreviewStreamAsync(
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            while (!cancellationToken.IsCancellationRequested && IsConnected)
             {
-                _lastLoggedRoutingKey = routingKey;
-                string action = trigger.Action == "pass"
-                    ? "PASS (no robot pick)"
-                    : "ROBOT PICK";
-                SystemLogService.Add(
-                    "AI ROUTING",
-                    $"{trigger.ClassName} ({trigger.Confidence:P1}) -> " +
-                    $"{action}; inspection {trigger.InspectionId}.");
+                try
+                {
+                    await foreach (byte[] jpeg in _visionApi
+                        .StreamPreviewFramesAsync(cancellationToken))
+                    {
+                        RemoteFrame = CreateBitmap(jpeg);
+                    }
+                }
+                catch (OperationCanceledException)
+                    when (cancellationToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    SystemLogService.Add(
+                        "DOFBOT CAM",
+                        $"MJPEG preview reconnecting: {ex.Message}");
+                }
+
+                await Task.Delay(
+                    PreviewReconnectDelayMs,
+                    cancellationToken);
             }
         }
-        else
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
         {
-            TriggerSummary = "No trigger recorded";
+            // Normal disconnect, stop, or camera restart.
         }
-
-        if (status.LastJob is { } job)
-        {
-            string shortId = string.IsNullOrWhiteSpace(job.JobId)
-                ? "-"
-                : job.JobId[..Math.Min(8, job.JobId.Length)];
-            JobSummary =
-                $"{shortId}  •  {job.Status ?? "unknown"}" +
-                (string.IsNullOrWhiteSpace(job.CurrentStep)
-                    ? ""
-                    : $"  •  {job.CurrentStep}");
-            RoutingSummary = job.Action == "pass"
-                ? "NORMAL -> PASS (no robot pick)"
-                : $"{job.ClassName ?? "defect"} -> robot pick";
-        }
-        else
-        {
-            JobSummary = "No vision job";
-            RoutingSummary = "No routing action";
-        }
-
-        if (status.Timing is { } timing)
-        {
-            TimingSummary = timing.ArrivalMs is null
-                ? timing.Reason ?? "Belt timing is disabled"
-                : $"Arrival {timing.ArrivalMs} ms  •  " +
-                  $"start delay {timing.StartDelayMs} ms" +
-                  (timing.Late ? "  •  LATE" : "");
-        }
-
-        if (status.Config != null &&
-            (initializeConfig || !_configInitialized))
-        {
-            ApplyConfig(status.Config);
-            _configInitialized = true;
-        }
-    }
-
-    private void ApplyConfig(VisionConfig config)
-    {
-        BeltSpeedMmS = config.BeltSpeedMmS;
-        DistanceToPickMm = config.DistanceToPickMm;
-        RobotTimeToGripMs = config.RobotTimeToGripMs;
-        ProcessingMarginMs = config.ProcessingMarginMs;
-        AutomaticTriggerRequested = config.AutoTrigger;
-        AutomaticTriggerActive = config.AutoTrigger;
-    }
-
-    private void ApplyNextClassification(VisionClassification? result)
-    {
-        NextAiResult = result == null
-            ? "Queue empty"
-            : $"{result.ClassName} ({result.Confidence:P1}) -> " +
-              (result.Action == "pass" ? "PASS" : "ROBOT PICK");
     }
 
     private static BitmapImage CreateBitmap(byte[] data)
@@ -913,7 +721,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
 
     private void SetDisconnected(string error)
     {
-        _pollTimer.Stop();
+        StopPolling();
         IsConnected = false;
         ConnectionStatus = "Disconnected";
         LastError = error;
@@ -927,7 +735,7 @@ public partial class VisionTriggerViewModel : ObservableObject, IDisposable
         if (_disposed)
             return;
 
-        _pollTimer.Stop();
+        StopPolling();
         _visionApi.Dispose();
         _disposed = true;
         GC.SuppressFinalize(this);

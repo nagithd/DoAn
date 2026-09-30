@@ -234,7 +234,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--host", default=os.environ.get("AI_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("AI_PORT", "7100")))
     parser.add_argument("--conf", type=float, default=float(os.environ.get("AI_CONFIDENCE", "0.25")))
-    parser.add_argument("--imgsz", type=int, default=int(os.environ.get("AI_IMAGE_SIZE", "640")))
+    parser.add_argument("--imgsz", type=int, default=int(os.environ.get("AI_IMAGE_SIZE", "512")))
     parser.add_argument("--device", default=os.environ.get("AI_DEVICE", "cpu"))
     return parser.parse_args()
 

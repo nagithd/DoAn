@@ -2,7 +2,8 @@
   "name": "battery-defect-yolov8n-640",
   "task": "detect",
   "architecture": "YOLOv8n",
-  "image_size": 640,
+  "training_image_size": 640,
+  "default_inference_image_size": 512,
   "classes": {
     "0": "Battery",
     "1": "Dented",

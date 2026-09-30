@@ -4,14 +4,22 @@ namespace WpfApp3.Models;
 
 public sealed class RobotHealthResponse
 {
+    [JsonPropertyName("conveyor_handshake_version")]
+    public int ConveyorHandshakeVersion { get; set; }
+
+    [JsonPropertyName("pick_guard_enabled")]
+    public bool PickGuardEnabled { get; set; }
     [JsonPropertyName("status")]
-    public string Status { get; set; } = "";
+    public string Status { get; set; } = "unknown";
 
     [JsonPropertyName("motion_enabled")]
     public bool MotionEnabled { get; set; }
 
     [JsonPropertyName("robot_initialized")]
     public bool RobotInitialized { get; set; }
+
+    [JsonPropertyName("servo_feedback_available")]
+    public bool? ServoFeedbackAvailable { get; set; }
 }
 
 public sealed class RobotStatusResponse
@@ -46,6 +54,15 @@ public sealed class RobotStatusResponse
     public RobotStatusResponse EffectiveState => Robot ?? this;
 }
 
+public sealed class RobotCommandResponse
+{
+    [JsonPropertyName("success")]
+    public bool Success { get; set; }
+
+    [JsonPropertyName("error")]
+    public string? Error { get; set; }
+}
+
 public sealed class RobotServosResponse
 {
     [JsonPropertyName("success")]
@@ -54,14 +71,8 @@ public sealed class RobotServosResponse
     [JsonPropertyName("servos")]
     public List<double?> Servos { get; set; } = [];
 
-    [JsonPropertyName("error")]
-    public string? Error { get; set; }
-}
-
-public sealed class RobotCommandResponse
-{
-    [JsonPropertyName("success")]
-    public bool Success { get; set; }
+    [JsonPropertyName("feedback_available")]
+    public bool FeedbackAvailable { get; set; }
 
     [JsonPropertyName("error")]
     public string? Error { get; set; }

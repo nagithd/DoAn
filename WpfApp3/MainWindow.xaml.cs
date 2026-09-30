@@ -3,7 +3,6 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
-using WpfApp3.Dialogs;
 using WpfApp3.Models;
 using WpfApp3.Services;
 using WpfApp3.ViewModels;
@@ -25,6 +24,8 @@ public partial class MainWindow : Window
     private bool _systemStopRequested;
     private bool _systemStarted;
     private CancellationTokenSource? _systemStartCancellation;
+    private CancellationTokenSource? _cycleCancellation;
+    private string? _captureCycleId;
 
     public MainWindow()
     {
@@ -32,12 +33,11 @@ public partial class MainWindow : Window
 
         _cameraViewModel = new CameraViewModel();
         DataContext = _cameraViewModel;
-        _cameraViewModel.InspectionResultRequested +=
-            CameraViewModel_InspectionResultRequested;
         ConveyorControl.ViewModel.CameraStopReached +=
             Conveyor_CameraStopReached;
         ConveyorControl.ViewModel.RobotStopReached +=
             Conveyor_RobotStopReached;
+        ConveyorControl.ViewModel.HandshakeInvalidated += Conveyor_HandshakeInvalidated;
         _cameraViewModel.RefreshCommand.Execute(null);
 
         Loaded += MainWindow_Loaded;
@@ -51,31 +51,61 @@ public partial class MainWindow : Window
             "SYSTEM",
             "UI ready. Arduino sensor events synchronize IMITECH capture; " +
             "at the robot checkpoint WPF sends one direct fixed-pose pick " +
-            "signal to Jetson. Arduino independently controls checkpoint " +
-            "timing and conveyor restart; WPF does not send robot_done@.");
+            "signal to Jetson. Arduino holds each checkpoint until WPF " +
+            "acknowledges the matching camera result or completed robot job.");
+    }
+
+    private void Conveyor_HandshakeInvalidated(object? sender, EventArgs e)
+    {
+        _cycleCancellation?.Cancel();
+        _captureCycleId = null;
+        VisionTriggerControl.ViewModel.ClearDirectInspection();
     }
 
     private async void Conveyor_CameraStopReached(
         object? sender,
         ConveyorEventArgs e)
     {
+        string? cycleId = e.CycleId;
+        var conveyor = ConveyorControl.ViewModel;
+        if (cycleId == null || !conveyor.IsCurrentCycle(cycleId) || _captureCycleId == cycleId) return;
+        _cycleCancellation?.Cancel();
+        _cycleCancellation?.Dispose();
+        _cycleCancellation = new CancellationTokenSource(TimeSpan.FromSeconds(50));
+        _captureCycleId = cycleId;
+        CancellationToken token = _cycleCancellation.Token;
+        VisionTriggerControl.ViewModel.ClearDirectInspection();
         SystemLogService.Add(
             "SYSTEM",
             "Arduino confirmed conveyor stop at the IMITECH camera; " +
             "starting synchronized capture.");
 
-        InspectionResult? result =
-            await _cameraViewModel.CaptureAndInspectFromArduinoAsync();
-        if (result == null)
-            return;
-
-        VisionTriggerControl.ViewModel.StoreDirectInspectionResult(result);
+        try
+        {
+            InspectionResult? result = await _cameraViewModel.CaptureAndInspectFromArduinoAsync(token);
+            if (!conveyor.IsCurrentCycle(cycleId)) return;
+            token.ThrowIfCancellationRequested();
+            if (result == null || !VisionTriggerControl.ViewModel.StoreDirectInspectionResult(result, cycleId))
+                throw new InvalidOperationException("No valid AI route for this cycle; conveyor held.");
+            if (!await conveyor.ReleaseCheckpointAsync(cycleId, robotCompleted: false, token))
+                throw new InvalidOperationException("CAMERA_READY acknowledgement missing.");
+            // Capture/AI deadline ends here. Robot checkpoint has its own deadline.
+            _cycleCancellation.CancelAfter(Timeout.InfiniteTimeSpan);
+        }
+        catch (Exception ex)
+        {
+            if (conveyor.IsCurrentCycle(cycleId)) conveyor.StopForSystemStart();
+            SystemLogService.Add("SAFETY", "Camera handshake failed: " + ex.Message);
+        }
     }
 
     private async void Conveyor_RobotStopReached(
         object? sender,
         ConveyorEventArgs e)
     {
+        string? cycleId = e.CycleId;
+        var conveyor = ConveyorControl.ViewModel;
+        if (cycleId == null || !conveyor.IsCurrentCycle(cycleId) || _cycleCancellation == null) return;
         if (_robotCheckpointInProgress)
         {
             SystemLogService.Add(
@@ -88,13 +118,24 @@ public partial class MainWindow : Window
         SystemLogService.Add(
             "SYSTEM",
             "Arduino confirmed conveyor stop at the DOFBOT checkpoint; " +
-            "submitting one fixed-pose AI routing job. Arduino retains " +
-            "authority over the conveyor cycle.");
+            "waiting for the matching Robot API job before releasing the conveyor.");
 
         try
         {
-            await VisionTriggerControl.ViewModel
-                .TriggerAtRobotCheckpointAsync();
+            _cycleCancellation.CancelAfter(TimeSpan.FromSeconds(110));
+            CancellationToken token = _cycleCancellation.Token;
+            bool completed = await VisionTriggerControl.ViewModel.TriggerAtRobotCheckpointAsync(cycleId, token);
+            token.ThrowIfCancellationRequested();
+            if (!conveyor.IsCurrentCycle(cycleId)) return;
+            if (!completed || !await conveyor.ReleaseCheckpointAsync(cycleId, robotCompleted: true, token))
+                throw new InvalidOperationException("Robot completion or ROBOT_DONE acknowledgement missing.");
+            _cycleCancellation.CancelAfter(Timeout.InfiniteTimeSpan);
+            SystemLogService.Add("SYSTEM", "Cycle acknowledged: " + cycleId);
+        }
+        catch (Exception ex)
+        {
+            if (conveyor.IsCurrentCycle(cycleId)) conveyor.StopForSystemStart();
+            SystemLogService.Add("SAFETY", "Robot handshake failed; hold conveyor: " + ex.Message);
         }
         finally
         {
@@ -190,12 +231,13 @@ public partial class MainWindow : Window
             SystemLog_CollectionChanged;
         LayoutViewport.SizeChanged -= LayoutViewport_SizeChanged;
         MainTabs.SelectionChanged -= MainTabs_SelectionChanged;
-        _cameraViewModel.InspectionResultRequested -=
-            CameraViewModel_InspectionResultRequested;
         ConveyorControl.ViewModel.CameraStopReached -=
             Conveyor_CameraStopReached;
         ConveyorControl.ViewModel.RobotStopReached -=
             Conveyor_RobotStopReached;
+        ConveyorControl.ViewModel.HandshakeInvalidated -= Conveyor_HandshakeInvalidated;
+        _cycleCancellation?.Cancel();
+        _cycleCancellation?.Dispose();
         _cameraViewModel.Dispose();
         ConveyorControl.Dispose();
         VisionTriggerControl.Dispose();
@@ -211,20 +253,6 @@ public partial class MainWindow : Window
         _cameraViewModel.SetLivePreviewActive(MainTabs.SelectedIndex == 0);
         if (MainTabs.SelectedIndex == 2)
             ScrollSystemLogToLatest();
-    }
-
-    private void CameraViewModel_InspectionResultRequested(
-        object? sender,
-        InspectionResult result)
-    {
-        var dialog = new AIDetectionResultDialog(
-            result,
-            _cameraViewModel.AiServiceStatus,
-            _cameraViewModel.CheckAiServiceCommand)
-        {
-            Owner = this
-        };
-        dialog.ShowDialog();
     }
 
     private async void StartSystemButton_Click(
@@ -273,7 +301,7 @@ public partial class MainWindow : Window
                 SystemLogService.Add(
                     "SAFETY",
                     "System start stopped because Arduino could not be " +
-                    "connected and placed at PWM 250 STOP.");
+                    "connected and placed at PWM 255 STOP.");
                 return;
             }
 
@@ -313,7 +341,7 @@ public partial class MainWindow : Window
                 return;
             }
 
-            if (!ConveyorControl.ViewModel.StartForSystem())
+            if (!await ConveyorControl.ViewModel.StartForSystemAsync(_systemStartCancellation.Token))
             {
                 SystemStartupStatus.Text =
                     "Start blocked: conveyor command was not sent";
@@ -391,7 +419,7 @@ public partial class MainWindow : Window
             SystemLogService.Add(
                 conveyorStopSent ? "SYSTEM" : "SAFETY",
                 conveyorStopSent
-                    ? "PWM 250 STOP was written to the Arduino serial " +
+                    ? "PWM 255 STOP was written to the Arduino serial " +
                       "port. Camera streams are closed; AI service, Robot " +
                       "API and Jetson remain running. Confirm the Arduino " +
                       "acknowledgement and physical conveyor state."

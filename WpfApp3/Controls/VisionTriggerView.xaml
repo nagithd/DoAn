@@ -130,7 +130,8 @@
                                VerticalAlignment="Center"/>
                     <Image Source="{Binding RemoteFrame}"
                            Stretch="Uniform"
-                           RenderOptions.BitmapScalingMode="HighQuality"/>
+                           RenderOptions.BitmapScalingMode="LowQuality"
+                           SnapsToDevicePixels="True"/>
                 </Grid>
             </Border>
 
@@ -175,6 +176,13 @@
 
                     <StackPanel Grid.Row="2" Margin="0,14,0,0">
                         <Separator Margin="0,0,0,12"/>
+
+                        <Button Content="Manual Dofbot"
+                                Click="OpenRobotDiagnostics_Click"
+                                Style="{StaticResource PrimaryButton}"
+                                HorizontalAlignment="Stretch"
+                                Margin="0,0,0,8"
+                                ToolTip="Open manual servo calibration in a separate maintenance window. No diagnostic polling runs while the window is closed."/>
 
                         <Button Content="HOME ROBOT"
                                 Command="{Binding HomeCommand}"

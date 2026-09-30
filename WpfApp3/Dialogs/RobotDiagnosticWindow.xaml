@@ -1,0 +1,258 @@
+<Window x:Class="WpfApp3.Dialogs.RobotDiagnosticWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="DOFBOT Maintenance and Calibration"
+        Width="1000"
+        Height="720"
+        MinWidth="840"
+        MinHeight="600"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource WindowBackground}">
+    <Window.Resources>
+        <Style x:Key="DiagnosticTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="Foreground" Value="{StaticResource PrimaryText}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource BorderBrushColor}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <Border Grid.Row="0"
+                Style="{StaticResource CardStyle}"
+                Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                    <TextBlock Text="Robot API address"
+                               Style="{StaticResource LabelStyle}"/>
+                    <TextBox Text="{Binding RobotBaseUrl, UpdateSourceTrigger=PropertyChanged}"
+                             Style="{StaticResource DiagnosticTextBox}"
+                             Height="40"
+                             Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Bottom">
+                    <Button Content="Connect"
+                            Command="{Binding ConnectCommand}"
+                            Style="{StaticResource PrimaryButton}"
+                            MinWidth="110"
+                            Margin="0,0,8,0"/>
+                    <Button Content="Disconnect"
+                            Command="{Binding DisconnectCommand}"
+                            Style="{StaticResource NeutralButton}"
+                            MinWidth="130"
+                            Margin="0,0,8,0"/>
+                    <Button Content="Refresh"
+                            Command="{Binding RefreshCommand}"
+                            Style="{StaticResource NeutralButton}"
+                            MinWidth="145"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Border Grid.Row="1"
+                Style="{StaticResource CardStyle}"
+                Margin="0,0,0,10">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0">
+                    <TextBlock Text="Connection" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding ConnectionStatus}" Style="{StaticResource ValueStyle}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Robot state" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding RobotState}" Style="{StaticResource ValueStyle}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Grid.Column="2">
+                    <TextBlock Text="Current step" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding CurrentStep}" Style="{StaticResource ValueStyle}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="3">
+                    <TextBlock Text="Busy / queue" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Style="{StaticResource ValueStyle}">
+                        <Run Text="{Binding IsBusy}"/><Run Text=" / "/><Run Text="{Binding QueueSize}"/>
+                    </TextBlock>
+                </StackPanel>
+                <StackPanel Grid.Column="4">
+                    <TextBlock Text="Servo feedback" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding FeedbackAvailable}" Style="{StaticResource ValueStyle}" FontWeight="SemiBold"/>
+                </StackPanel>
+                <StackPanel Grid.Column="5">
+                    <TextBlock Text="Last refresh" Style="{StaticResource LabelStyle}"/>
+                    <TextBlock Text="{Binding LastRefresh}" Style="{StaticResource ValueStyle}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="2.1*"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ScrollViewer Grid.Column="0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Margin="0,0,10,0">
+                <ItemsControl ItemsSource="{Binding Servos}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Style="{StaticResource CardStyle}"
+                                    Width="295"
+                                    Margin="0,0,10,10">
+                                <StackPanel>
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{Binding Name}"
+                                                   Style="{StaticResource CardTitleStyle}"/>
+                                        <TextBlock Grid.Column="1"
+                                                   Text="{Binding CurrentAngle, StringFormat={}{0:0.0}°}"
+                                                   Foreground="{StaticResource SuccessBrush}"
+                                                   FontWeight="Bold"
+                                                   VerticalAlignment="Center"/>
+                                    </Grid>
+
+                                    <Slider Minimum="{Binding MinimumAngle}"
+                                            Maximum="{Binding MaximumAngle}"
+                                            Value="{Binding TargetAngle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                            PreviewMouseLeftButtonDown="ServoSlider_PreviewMouseLeftButtonDown"
+                                            PreviewMouseLeftButtonUp="ServoSlider_PreviewMouseLeftButtonUp"
+                                            ValueChanged="ServoSlider_ValueChanged"
+                                            LostMouseCapture="ServoSlider_LostMouseCapture"
+                                            IsEnabled="{Binding DataContext.CanUseServoSliders, RelativeSource={RelativeSource AncestorType=Window}}"
+                                            Margin="0,8,0,8"/>
+
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*"/>
+                                            <ColumnDefinition Width="Auto"/>
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox Grid.Column="0"
+                                                 Text="{Binding TargetAngle, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged, StringFormat=F1}"
+                                                 Style="{StaticResource DiagnosticTextBox}"
+                                                 Height="38"
+                                                 Margin="0,0,8,0"/>
+                                        <Button Grid.Column="1"
+                                                Content="Apply"
+                                                Command="{Binding DataContext.SetServoCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                CommandParameter="{Binding}"
+                                                IsEnabled="{Binding DataContext.CanIssueManualMotion, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                Style="{StaticResource PrimaryButton}"
+                                                MinWidth="95"/>
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+
+            <Border Grid.Column="1"
+                    Style="{StaticResource CardStyle}"
+                    Margin="0">
+                <Grid>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+                    <Grid Grid.Row="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Text="Diagnostic log"
+                                   Style="{StaticResource CardTitleStyle}"/>
+                        <Button Grid.Column="1"
+                                Content="Clear"
+                                Command="{Binding ClearLogCommand}"
+                                Style="{StaticResource NeutralButton}"
+                                MinWidth="80"/>
+                    </Grid>
+                    <ListBox Grid.Row="1"
+                             ItemsSource="{Binding DiagnosticLog}"
+                             Margin="0,8,0,8"
+                             FontFamily="Consolas"
+                             FontSize="13"/>
+                </Grid>
+            </Border>
+        </Grid>
+
+        <Border Grid.Row="3"
+                Style="{StaticResource CardStyle}"
+                Margin="0,10,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <TextBlock Text="Apply move time (ms)"
+                               Style="{StaticResource LabelStyle}"
+                               VerticalAlignment="Center"
+                               Margin="0,0,8,0"/>
+                    <TextBox Text="{Binding ServoMoveTimeMs, UpdateSourceTrigger=LostFocus}"
+                             Style="{StaticResource DiagnosticTextBox}"
+                             Width="100"
+                             Height="36"/>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
+                    <Button Content="HOME"
+                            Command="{Binding HomeCommand}"
+                            IsEnabled="{Binding CanIssueManualMotion}"
+                            Style="{StaticResource NeutralButton}"
+                            MinWidth="120"
+                            Margin="0,0,8,0"/>
+                    <Button Content="RESET"
+                            Command="{Binding ResetCommand}"
+                            IsEnabled="{Binding CanIssueManualMotion}"
+                            Style="{StaticResource DangerButton}"
+                            MinWidth="120"
+                            Margin="0,0,8,0"/>
+                    <Button Content="Close"
+                            Click="Close_Click"
+                            Style="{StaticResource NeutralButton}"
+                            MinWidth="110"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

@@ -24,10 +24,7 @@ except ImportError:
 
 logger = logging.getLogger("dofbot-vision")
 
-# Temporary project mode: keep the DOFBOT camera available as an unannotated
-# preview, but run no MOG2/TensorRT detection and never generate a camera
-# trigger. Arduino + WPF direct /robot/pick routing remains independent.
-VISION_PROCESSING_ENABLED = False
+VISION_PROCESSING_ENABLED = True
 
 INSPECTION_CLASS_ACTIONS = {
     "dented": "robot_pick",
@@ -43,21 +40,17 @@ class VisionTriggerConfig:
     frame_width: int = 640
     frame_height: int = 480
 
-    # The camera remains monitor-only. Inference is performed by a small
-    # TensorRT 8 service on the Jetson host because the Yahboom container does
-    # not provide a compatible GPU Python runtime.
     monitor_only: bool = True
+
     detection_backend: str = "tensorrt_http"
-    detector_url: str = "http://172.17.0.1:7101/infer"
+    detector_url: str = "http://127.0.0.1:7101/infer"
     detector_confidence: float = 0.45
     detector_timeout_seconds: float = 2.0
     detector_jpeg_quality: int = 80
+    preview_jpeg_quality: int = 70
+    preview_max_fps: float = 10.0
 
-    # One centered region is both the processing ROI and trigger zone.
-    # Ratios keep the zone stable when the camera resolution changes.
     entry_zone_center_x_ratio: float = 0.50
-    # The physical belt fills most of the upper camera frame; leave only a
-    # narrow margin and exclude the bright lower rail.
     entry_zone_center_y_ratio: float = 0.40
     entry_zone_width_ratio: float = 0.90
     entry_zone_height_ratio: float = 0.72
@@ -73,10 +66,6 @@ class VisionTriggerConfig:
 
     background_history: int = 200
     background_threshold: float = 40.0
-    checkpoint_detection_timeout_seconds: float = 3.0
-    checkpoint_detection_max_age_seconds: float = 1.0
-
-    # Image angle of the conveyor direction: 0 = left/right, 90 = vertical.
     conveyor_angle_deg: float = 90.0
     wrist_reference_angle: float = 90.0
     wrist_direction: int = 1
@@ -85,21 +74,15 @@ class VisionTriggerConfig:
     max_wrist_correction_deg: float = 45.0
     use_wrist_correction: bool = True
 
-    # Timing model for a continuously moving conveyor.
     belt_speed_mm_s: float = 40.0
     distance_to_pick_mm: float = 200.0
     robot_time_to_grip_ms: int = 4150
     processing_margin_ms: int = 350
     reject_late_trigger: bool = True
 
-    # Kept only so older vision_config.json files remain loadable. Runtime
-    # routing uses the FIFO AI classification queue instead.
-    default_class: str = "normal"
     min_ai_confidence: float = 0.40
     classification_ttl_seconds: float = 30.0
 
-    # Legacy continuous camera routing stays disabled. Automatic routing is
-    # started explicitly by Arduino's ROBOT_STOPPED checkpoint event.
     auto_trigger: bool = False
 
 
@@ -116,8 +99,11 @@ class VisionTriggerController:
         self._config = self._load_config()
 
         self._lock = threading.RLock()
+        self._preview_condition = threading.Condition(self._lock)
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._detector_thread: threading.Thread | None = None
+        self._detector_event = threading.Event()
 
         self._running = False
         self._camera_open = False
@@ -129,7 +115,11 @@ class VisionTriggerController:
         self._last_trigger: dict[str, Any] | None = None
         self._last_job: dict[str, Any] | None = None
         self._last_error: str | None = None
-        self._latest_jpeg: bytes | None = None
+        self._latest_preview_jpeg: bytes | None = None
+        self._latest_annotated_jpeg: bytes | None = None
+        self._preview_sequence = 0
+        self._last_preview_publish_monotonic = 0.0
+        self._latest_detector_frame: Any | None = None
         self._previous_center: tuple[float, float] | None = None
         self._classification_queue: deque[dict[str, Any]] = deque()
         self._detector_available = False
@@ -201,6 +191,14 @@ class VisionTriggerController:
                 "detector_jpeg_quality must be between 40 and 100"
             )
 
+        if not 40 <= config.preview_jpeg_quality <= 100:
+            raise ValueError(
+                "preview_jpeg_quality must be between 40 and 100"
+            )
+
+        if not 1 <= config.preview_max_fps <= 30:
+            raise ValueError("preview_max_fps must be between 1 and 30")
+
         if config.monitor_only and config.auto_trigger:
             raise ValueError(
                 "auto_trigger cannot be enabled while monitor_only is true"
@@ -265,16 +263,6 @@ class VisionTriggerController:
                 "min_contour_fill_ratio must be between 0 and 1"
             )
 
-        if config.checkpoint_detection_timeout_seconds <= 0:
-            raise ValueError(
-                "checkpoint_detection_timeout_seconds must be > 0"
-            )
-
-        if config.checkpoint_detection_max_age_seconds <= 0:
-            raise ValueError(
-                "checkpoint_detection_max_age_seconds must be > 0"
-            )
-
         if config.stable_frames < 1:
             raise ValueError("stable_frames must be >= 1")
 
@@ -313,9 +301,6 @@ class VisionTriggerController:
 
         if config.processing_margin_ms < 0:
             raise ValueError("processing_margin_ms must be >= 0")
-
-        if not config.default_class.strip():
-            raise ValueError("default_class cannot be empty")
 
         if not 0 <= config.min_ai_confidence <= 1:
             raise ValueError("min_ai_confidence must be between 0 and 1")
@@ -375,19 +360,34 @@ class VisionTriggerController:
             self._detector_available = False
             self._last_inference_ms = None
             self._detector_output_shapes = []
+            self._latest_preview_jpeg = None
+            self._latest_annotated_jpeg = None
+            self._preview_sequence = 0
+            self._last_preview_publish_monotonic = 0.0
+            self._latest_detector_frame = None
             self._stop_event.clear()
+            self._detector_event.clear()
             self._thread = threading.Thread(
                 target=self._capture_loop,
                 name="vision-trigger",
                 daemon=True,
             )
+            self._detector_thread = threading.Thread(
+                target=self._detector_loop,
+                name="vision-detector",
+                daemon=True,
+            )
             self._thread.start()
+            self._detector_thread.start()
 
     def stop(self) -> None:
         with self._lock:
             self._running = False
             self._stop_event.set()
             thread = self._thread
+            detector_thread = self._detector_thread
+            self._detector_event.set()
+            self._preview_condition.notify_all()
 
         if (
             thread is not None
@@ -396,9 +396,19 @@ class VisionTriggerController:
         ):
             thread.join(timeout=3.0)
 
+        if (
+            detector_thread is not None
+            and detector_thread.is_alive()
+            and detector_thread is not threading.current_thread()
+        ):
+            detector_thread.join(timeout=3.0)
+
         with self._lock:
             self._thread = None
+            self._detector_thread = None
             self._camera_open = False
+            self._latest_detector_frame = None
+            self._preview_condition.notify_all()
 
     def reset_trigger(self) -> None:
         with self._lock:
@@ -476,9 +486,6 @@ class VisionTriggerController:
                 and self._last_trigger is not None
                 and self._last_trigger.get("inspection_id")
                 == requested_inspection_id
-                # Camera preview can observe the queued classification and
-                # populate last_trigger without creating a robot job. Only a
-                # completed checkpoint submission is idempotent here.
                 and self._last_trigger.get("source")
                 == "arduino_fixed_pose_checkpoint"
                 and self._last_job is not None
@@ -698,7 +705,39 @@ class VisionTriggerController:
 
     def latest_jpeg(self) -> bytes | None:
         with self._lock:
-            return self._latest_jpeg
+            return self._latest_preview_jpeg
+
+    def latest_annotated_jpeg(self) -> bytes | None:
+        with self._lock:
+            return self._latest_annotated_jpeg
+
+    def mjpeg_stream(self):
+        """Yield only newer raw preview frames over one HTTP connection."""
+        sequence = -1
+        while True:
+            with self._preview_condition:
+                self._preview_condition.wait_for(
+                    lambda: (
+                        self._preview_sequence != sequence
+                        or self._stop_event.is_set()
+                    ),
+                    timeout=2.0,
+                )
+                if self._stop_event.is_set():
+                    return
+                jpeg = self._latest_preview_jpeg
+                sequence = self._preview_sequence
+
+            if jpeg is None:
+                continue
+
+            yield (
+                b"--frame\r\n"
+                b"Content-Type: image/jpeg\r\n"
+                + f"Content-Length: {len(jpeg)}\r\n\r\n".encode("ascii")
+                + jpeg
+                + b"\r\n"
+            )
 
     @staticmethod
     def _robot_is_ready(
@@ -813,9 +852,6 @@ class VisionTriggerController:
 
     def _capture_loop(self) -> None:
         config = self._config
-        # The DOFBOT USB camera is a V4L2 device.  OpenCV's automatic backend
-        # selection on Jetson may choose GStreamer first and fail to construct
-        # a pipeline even when /dev/video0 is mapped and no process owns it.
         capture = cv2.VideoCapture(
             config.camera_index,
             cv2.CAP_V4L2,
@@ -836,19 +872,6 @@ class VisionTriggerController:
                     f"Cannot open camera index {config.camera_index}"
                 )
 
-            subtractor = None
-            kernel = None
-            if config.detection_backend == "mog2":
-                subtractor = cv2.createBackgroundSubtractorMOG2(
-                    history=config.background_history,
-                    varThreshold=config.background_threshold,
-                    detectShadows=False,
-                )
-                kernel = cv2.getStructuringElement(
-                    cv2.MORPH_ELLIPSE,
-                    (5, 5),
-                )
-
             with self._lock:
                 self._camera_open = True
 
@@ -863,6 +886,8 @@ class VisionTriggerController:
                 config = VisionTriggerConfig(
                     **self.get_config()
                 )
+                self._publish_preview_frame(frame, config)
+
                 if not VISION_PROCESSING_ENABLED:
                     with self._lock:
                         self._frame_count += 1
@@ -875,30 +900,13 @@ class VisionTriggerController:
                         self._last_inference_ms = None
                         self._detector_output_shapes = []
                         self._last_error = None
-                    self._update_raw_frame(frame)
                     continue
 
-                if config.detection_backend == "tensorrt_http":
-                    detection = self._process_frame_tensorrt(
-                        frame,
-                        config,
-                    )
-                else:
-                    detection = self._process_frame(
-                        frame,
-                        subtractor,
-                        kernel,
-                        config,
-                    )
-                self._update_detection_state(
-                    detection,
-                    config,
-                )
-                self._update_debug_frame(
-                    frame,
-                    detection,
-                    config,
-                )
+                # The detector consumes the newest available frame. It never
+                # blocks camera acquisition or the MJPEG preview stream.
+                with self._lock:
+                    self._latest_detector_frame = frame.copy()
+                self._detector_event.set()
 
         except Exception as exc:
             logger.exception("Vision trigger stopped")
@@ -909,17 +917,95 @@ class VisionTriggerController:
             with self._lock:
                 self._camera_open = False
                 self._running = False
+                self._preview_condition.notify_all()
 
-    def _update_raw_frame(self, frame: Any) -> None:
-        """Publish the DOFBOT frame without zones, boxes, or trigger text."""
+    def _publish_preview_frame(
+        self,
+        frame: Any,
+        config: VisionTriggerConfig,
+    ) -> None:
+        """Publish raw camera frames at a bounded rate for the WPF preview."""
+        now = time.monotonic()
+        if (
+            now - self._last_preview_publish_monotonic
+            < 1.0 / config.preview_max_fps
+        ):
+            return
+
         success, encoded = cv2.imencode(
             ".jpg",
             frame,
-            [int(cv2.IMWRITE_JPEG_QUALITY), 85],
+            [
+                int(cv2.IMWRITE_JPEG_QUALITY),
+                config.preview_jpeg_quality,
+            ],
         )
         if success:
+            with self._preview_condition:
+                self._last_preview_publish_monotonic = now
+                self._latest_preview_jpeg = encoded.tobytes()
+                self._preview_sequence += 1
+                self._preview_condition.notify_all()
+
+    def _detector_loop(self) -> None:
+        """Run inference separately from USB capture and MJPEG publishing."""
+        subtractor = None
+        kernel = None
+        detector_backend = None
+
+        while not self._stop_event.is_set():
+            self._detector_event.wait(timeout=0.2)
+            self._detector_event.clear()
+            if self._stop_event.is_set():
+                break
+
             with self._lock:
-                self._latest_jpeg = encoded.tobytes()
+                frame = (
+                    self._latest_detector_frame.copy()
+                    if self._latest_detector_frame is not None
+                    else None
+                )
+            if frame is None:
+                continue
+
+            config = VisionTriggerConfig(**self.get_config())
+            try:
+                if detector_backend != config.detection_backend:
+                    detector_backend = config.detection_backend
+                    subtractor = None
+                    kernel = None
+                    if detector_backend == "mog2":
+                        subtractor = cv2.createBackgroundSubtractorMOG2(
+                            history=config.background_history,
+                            varThreshold=config.background_threshold,
+                            detectShadows=False,
+                        )
+                        kernel = cv2.getStructuringElement(
+                            cv2.MORPH_ELLIPSE,
+                            (5, 5),
+                        )
+
+                capture_monotonic = time.monotonic()
+                if detector_backend == "tensorrt_http":
+                    detection = self._process_frame_tensorrt(frame, config)
+                else:
+                    detection = self._process_frame(
+                        frame,
+                        subtractor,
+                        kernel,
+                        config,
+                    )
+
+                if detection is not None:
+                    detection["capture_monotonic"] = capture_monotonic
+                    detection["frame_width"] = int(frame.shape[1])
+                    detection["frame_height"] = int(frame.shape[0])
+                self._update_detection_state(detection, config)
+                self._update_debug_frame(frame, detection, config)
+            except Exception as exc:
+                logger.exception("Detector worker failed")
+                with self._lock:
+                    self._last_error = str(exc)
 
     def _process_frame_tensorrt(
         self,
@@ -1013,8 +1099,7 @@ class VisionTriggerController:
         center_x = float(best.get("center_x", x + box_width / 2.0))
         center_y = float(best.get("center_y", y + box_height / 2.0))
 
-        # Rotation is deliberately not inferred by the one-class detector.
-        # Fixed robot poses remain authoritative in checkpoint mode.
+
         return {
             "detector": "yolov8n_tensorrt_fp16",
             "class_name": "battery",
@@ -1134,8 +1219,6 @@ class VisionTriggerController:
                 / max(rectangle_area, 1.0)
             )
 
-            # Conveyor seams and glare normally form long, thin or sparse
-            # contours. Reject them before they can become a trigger angle.
             if short_side < config.min_short_side_pixels:
                 continue
             if aspect_ratio > config.max_aspect_ratio:
@@ -1368,16 +1451,6 @@ class VisionTriggerController:
             (0, 220, 255),
             3,
         )
-        cv2.putText(
-            frame,
-            "YOLO MONITOR ZONE",
-            (entry_rect[0] + 10, max(30, entry_rect[1] + 30)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.65,
-            (0, 220, 255),
-            2,
-        )
-
         if detection is not None:
             points = np.array(
                 detection["rotated_box"],
@@ -1437,26 +1510,6 @@ class VisionTriggerController:
                 label_thickness,
             )
 
-        if config.monitor_only:
-            mode = "TENSORRT MONITOR ONLY"
-        else:
-            mode = (
-                "AUTO"
-                if config.auto_trigger
-                else "CHECKPOINT MODE"
-            )
-        cv2.putText(
-            frame,
-            mode,
-            (12, 28),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.7,
-            (0, 0, 255)
-            if config.auto_trigger and not config.monitor_only
-            else (0, 220, 255),
-            2,
-        )
-
         success, encoded = cv2.imencode(
             ".jpg",
             frame,
@@ -1464,7 +1517,7 @@ class VisionTriggerController:
         )
         if success:
             with self._lock:
-                self._latest_jpeg = encoded.tobytes()
+                self._latest_annotated_jpeg = encoded.tobytes()
 
 
 def register_vision_routes(
@@ -1572,5 +1625,34 @@ def register_vision_routes(
             mimetype="image/jpeg",
             headers={
                 "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+        )
+
+    @app.get("/vision/annotated.jpg")
+    def annotated_frame():
+        jpeg = controller.latest_annotated_jpeg()
+
+        if jpeg is None:
+            return jsonify({
+                "success": False,
+                "error": "No annotated camera frame is available",
+            }), 503
+
+        return Response(
+            jpeg,
+            mimetype="image/jpeg",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+            },
+        )
+
+    @app.get("/vision/stream.mjpg")
+    def vision_stream():
+        return Response(
+            controller.mjpeg_stream(),
+            mimetype="multipart/x-mixed-replace; boundary=frame",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate",
+                "X-Accel-Buffering": "no",
             },
         )

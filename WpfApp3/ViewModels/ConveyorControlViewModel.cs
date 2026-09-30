@@ -4,37 +4,37 @@ using System.Collections.ObjectModel;
 using System.IO.Ports;
 using System.Text;
 using System.Windows;
+using System.Windows.Threading;
 using WpfApp3.Models;
 using WpfApp3.Services;
 
 namespace WpfApp3.ViewModels;
 
-/// <summary>
-/// Serial integration for PhanLoaiPin_7826.ino. Running speed is represented
-/// by the raw Arduino PWM value: a lower value is faster and 250 is STOP.
-/// Automatic operation is limited to the firmware's calibrated 0..120 range.
-/// </summary>
 public partial class ConveyorControlViewModel : ObservableObject, IDisposable
 {
     public const int ConveyorBaudRate = 9600;
-    public const int MinimumRunningPwm = 0;
-    public const int MaximumRunningPwm = 120;
-    public const int StopPwm = 250;
+    public const int MinimumPwm = 0;
+    // Motion timing to the camera and DOFBOT checkpoint is calibrated only
+    // in this range. PWM 255 is reserved for STOP and is handled separately.
+    public const int MaximumPwm = 170;
+    public const int StopPwm = 255;
     public const int DefaultRunningPwm = 100;
-
-    private static readonly int[] CalibratedPwm =
-        [0, 20, 40, 60, 80, 90, 100, 120];
-    private static readonly int[] CalibratedRobotDelayMs =
-        [2840, 3380, 3700, 4250, 4700, 4900, 5650, 6100];
 
     private readonly object _serialLock = new();
     private readonly StringBuilder _receiveBuffer = new();
     private SerialPort? _serialPort;
     private bool _disposed;
+    private readonly DispatcherTimer _heartbeatTimer = new() { Interval = TimeSpan.FromSeconds(1) };
+    private readonly Dictionary<string, TaskCompletionSource<bool>> _acknowledgements = new();
+    private string? _hostSession;
+    private uint _lastCycleNumber;
+    private long _lastHeartbeatTick;
+    public bool HandshakeReady { get; private set; }
+    public string? ActiveCycleId { get; private set; }
+    public event EventHandler? HandshakeInvalidated;
 
     public ObservableCollection<string> AvailablePorts { get; } = [];
 
-    public event EventHandler<ConveyorEventArgs>? ConveyorEventReceived;
     public event EventHandler<ConveyorEventArgs>? CameraStopReached;
     public event EventHandler<ConveyorEventArgs>? RobotStopReached;
 
@@ -51,54 +51,106 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
     private string connectionStatus = "Disconnected";
 
     [ObservableProperty]
-    private string motorStatus = "Stopped / unknown";
-
-    [ObservableProperty]
-    private string lastReceived = "No Arduino response";
-
-    [ObservableProperty]
-    private string sensorStatus = "Waiting for sensor";
-
-    [ObservableProperty]
-    private string cycleStage = "Idle";
-
-    [ObservableProperty]
-    private int detectedBatteryCount;
-
-    [ObservableProperty]
     private int selectedPwm = DefaultRunningPwm;
 
     [ObservableProperty]
     private int lastAppliedPwm = StopPwm;
 
-    [ObservableProperty]
-    private bool isWaitingForRobotCompletion;
+    public ConveyorControlViewModel()
+    {
+        RefreshPorts();
+        _heartbeatTimer.Tick += (_, _) =>
+        {
+            if (!HandshakeReady) return;
+            if (Environment.TickCount64 - _lastHeartbeatTick > 5000)
+            {
+                StopMotor();
+                InvalidateHandshake("Arduino heartbeat lost; reconnect to recover.");
+                return;
+            }
+            if (!WriteProtocol($"PING:{_hostSession}@"))
+                InvalidateHandshake("Cannot send host heartbeat.");
+        };
+    }
 
-    public string BaudRateText => $"{ConveyorBaudRate} baud, 8-N-1";
-    public string StartCommand => BuildMotorCommand(SelectedPwm);
-    public string StopCommand => BuildMotorCommand(StopPwm);
-    public double SelectedSpeedPercent =>
-        (StopPwm - SelectedPwm) / (double)StopPwm * 100.0;
-    public double EstimatedRobotTravelSeconds =>
-        EstimateRobotDelayMs(SelectedPwm) / 1000.0;
+    private void InvalidateCycle()
+    {
+        ActiveCycleId = null;
+        HandshakeInvalidated?.Invoke(this, EventArgs.Empty);
+    }
 
-    public ConveyorControlViewModel() => RefreshPorts();
+    private void InvalidateHandshake(string reason)
+    {
+        HandshakeReady = false;
+        _heartbeatTimer.Stop();
+        InvalidateCycle();
+        foreach (var ack in _acknowledgements.Values.ToArray()) ack.TrySetResult(false);
+        _acknowledgements.Clear();
+        SystemLogService.Add("SAFETY", reason);
+    }
+
+    private bool WriteProtocol(string command)
+    {
+        try
+        {
+            lock (_serialLock)
+            {
+                if (_serialPort?.IsOpen != true) return false;
+                _serialPort.Write(command);
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            SystemLogService.Add("CONVEYOR", ex.Message);
+            return false;
+        }
+    }
+
+    private async Task<bool> SendAcknowledgedAsync(string command, CancellationToken token = default,
+        string? acknowledgement = null)
+    {
+        string key = acknowledgement ?? "ACK:" + command;
+        if (_acknowledgements.ContainsKey(key)) return false;
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _acknowledgements[key] = completion;
+        try
+        {
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                token.ThrowIfCancellationRequested();
+                if (!WriteProtocol(command + "@")) return false;
+                if (await Task.WhenAny(completion.Task, Task.Delay(1200, token)) == completion.Task)
+                    return await completion.Task;
+            }
+            return false;
+        }
+        finally { _acknowledgements.Remove(key); }
+    }
+
+    public bool IsCurrentCycle(string cycleId) => HandshakeReady && ActiveCycleId == cycleId;
+
+    public async Task<bool> ReleaseCheckpointAsync(string cycleId, bool robotCompleted, CancellationToken token)
+    {
+        if (!IsCurrentCycle(cycleId)) return false;
+        bool ok = await SendAcknowledgedAsync(
+            $"{(robotCompleted ? "ROBOT_DONE" : "CAMERA_READY")}:{cycleId}", token);
+        // CYCLE_COMPLETED may arrive before ACK; Arduino's ACK still identifies this exact cycle.
+        return ok && HandshakeReady;
+    }
 
     partial void OnSelectedPwmChanged(int value)
     {
         int constrained = Math.Clamp(
             value,
-            MinimumRunningPwm,
-            MaximumRunningPwm);
+            MinimumPwm,
+            MaximumPwm);
         if (value != constrained)
         {
             SelectedPwm = constrained;
             return;
         }
 
-        OnPropertyChanged(nameof(StartCommand));
-        OnPropertyChanged(nameof(SelectedSpeedPercent));
-        OnPropertyChanged(nameof(EstimatedRobotTravelSeconds));
     }
 
     [RelayCommand]
@@ -167,8 +219,6 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
 
             IsConnected = true;
             ConnectionStatus = $"Connected — {SelectedPortName}";
-            MotorStatus = "Arduino connected — awaiting state";
-            SensorStatus = "Sensor armed";
             SystemLogService.Add(
                 "CONVEYOR",
                 $"Connected to {SelectedPortName} at {ConveyorBaudRate} baud. " +
@@ -176,10 +226,20 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
 
             await Task.Delay(1500);
             if (IsConnected)
-                SystemLogService.Add("CONVEYOR", "Serial event monitoring is ready.");
+            {
+                _hostSession = Guid.NewGuid().ToString("N")[..16];
+                _lastCycleNumber = 0;
+                HandshakeReady = await SendAcknowledgedAsync("HELLO:" + _hostSession);
+                if (!HandshakeReady)
+                    throw new InvalidOperationException("Arduino handshake v1 is required. Flash conveyor_battery_sort_v3 first.");
+                _lastHeartbeatTick = Environment.TickCount64;
+                _heartbeatTimer.Start();
+                SystemLogService.Add("CONVEYOR", "Handshake established; conveyor remains stopped.");
+            }
         }
         catch (Exception ex)
         {
+            InvalidateHandshake("Conveyor connection failed.");
             if (port != null)
             {
                 port.DataReceived -= SerialPort_DataReceived;
@@ -190,7 +250,6 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
                 _serialPort = null;
             IsConnected = false;
             ConnectionStatus = "Error";
-            MotorStatus = "Unavailable";
             SystemLogService.Add("CONVEYOR", $"COM connection failed: {ex.Message}");
         }
         finally
@@ -202,22 +261,20 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
     [RelayCommand]
     private void StartMotor()
     {
-        if (SendMotorPwm(SelectedPwm, "START"))
-            MotorStatus = $"Running request — PWM {SelectedPwm}";
+        SendMotorPwm(SelectedPwm, "START");
     }
 
     [RelayCommand]
     private void ApplySpeed()
     {
-        if (SendMotorPwm(SelectedPwm, "SPEED"))
-            MotorStatus = $"Speed request — PWM {SelectedPwm}";
+        SendMotorPwm(SelectedPwm, "SPEED");
     }
 
     [RelayCommand]
     private void StopMotor()
     {
-        if (SendMotorPwm(StopPwm, "STOP"))
-            MotorStatus = $"Stop request — PWM {StopPwm}";
+        InvalidateCycle();
+        SendMotorPwm(StopPwm, "STOP");
     }
 
     [RelayCommand]
@@ -225,16 +282,19 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
     {
         ClosePort(sendStopFirst: true);
         ConnectionStatus = "Disconnected";
-        MotorStatus = "Stopped / disconnected";
-        SensorStatus = "Disconnected";
-        CycleStage = "Idle";
     }
 
     private bool SendMotorPwm(int pwm, string action)
     {
-        int constrained = pwm == StopPwm
-            ? StopPwm
-            : Math.Clamp(pwm, MinimumRunningPwm, MaximumRunningPwm);
+        if (pwm != StopPwm && (!HandshakeReady || ActiveCycleId != null))
+        {
+            SystemLogService.Add("SAFETY", "RUN/SPEED is unavailable until handshake is ready and cycle is clear.");
+            return false;
+        }
+        int constrained = pwm == StopPwm ? StopPwm : Math.Clamp(
+            pwm,
+            MinimumPwm,
+            MaximumPwm);
         string command = BuildMotorCommand(constrained);
 
         try
@@ -265,32 +325,6 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
 
     private static string BuildMotorCommand(int pwm) => $"motor = {pwm}@";
 
-    private static int EstimateRobotDelayMs(int pwm)
-    {
-        int constrained = Math.Clamp(
-            pwm,
-            CalibratedPwm[0],
-            CalibratedPwm[^1]);
-
-        for (int index = 0; index < CalibratedPwm.Length - 1; index++)
-        {
-            int lowerPwm = CalibratedPwm[index];
-            int upperPwm = CalibratedPwm[index + 1];
-            if (constrained < lowerPwm || constrained > upperPwm)
-                continue;
-
-            double ratio = (constrained - lowerPwm) /
-                (double)(upperPwm - lowerPwm);
-            return CalibratedRobotDelayMs[index] +
-                (int)Math.Round(
-                    ratio *
-                    (CalibratedRobotDelayMs[index + 1] -
-                     CalibratedRobotDelayMs[index]));
-        }
-
-        return CalibratedRobotDelayMs[^1];
-    }
-
     public async Task<bool> ConnectForSystemStartAsync()
     {
         if (!IsConnected)
@@ -299,7 +333,7 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
             await ConnectAsync();
         }
 
-        return IsConnected;
+        return IsConnected && HandshakeReady;
     }
 
     public bool StartForSystem()
@@ -307,8 +341,17 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
         if (!IsConnected)
             return false;
 
-        StartMotor();
-        return LastAppliedPwm == SelectedPwm;
+        return SendMotorPwm(SelectedPwm, "START SYSTEM");
+    }
+
+    public async Task<bool> StartForSystemAsync(CancellationToken token = default)
+    {
+        if (!IsConnected || !HandshakeReady || ActiveCycleId != null) return false;
+        int pwm = Math.Clamp(SelectedPwm, MinimumPwm, MaximumPwm);
+        bool ok = await SendAcknowledgedAsync($"motor = {pwm}", token, $"ACK:MOTOR_PWM:{pwm}");
+        if (ok) LastAppliedPwm = pwm;
+        else StopForSystemStart();
+        return ok;
     }
 
     public bool StopForSystemStart()
@@ -316,8 +359,8 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
         if (!IsConnected)
             return false;
 
-        StopMotor();
-        return LastAppliedPwm == StopPwm;
+        InvalidateCycle();
+        return SendMotorPwm(StopPwm, "STOP SYSTEM");
     }
 
     private void SerialPort_DataReceived(object sender, SerialDataReceivedEventArgs e)
@@ -367,43 +410,41 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
 
     private void ProcessArduinoLine(string line)
     {
-        LastReceived = line;
-        ConveyorEventKind kind = ClassifyArduinoMessage(line);
-
-        switch (kind)
+        if (_acknowledgements.TryGetValue(line, out var ack)) ack.TrySetResult(true);
+        if (line == "HEARTBEAT:" + _hostSession) { _lastHeartbeatTick = Environment.TickCount64; return; }
+        if (line.StartsWith("EVENT:FAULT:", StringComparison.Ordinal) ||
+            (HandshakeReady && line == "READY:CONVEYOR_HANDSHAKE:1"))
         {
-            case ConveyorEventKind.SensorDetected:
-                DetectedBatteryCount++;
-                SensorStatus = "Battery detected";
-                CycleStage = "Approaching IMITECH camera";
-                break;
-            case ConveyorEventKind.CameraStopped:
-                SensorStatus = "Battery held at camera";
-                CycleStage = "Camera stopped — capture requested";
-                break;
-            case ConveyorEventKind.MovingToRobot:
-                CycleStage = "Transporting classified battery to DOFBOT";
-                break;
-            case ConveyorEventKind.RobotStopped:
-                IsWaitingForRobotCompletion = true;
-                CycleStage = "Battery held at robot checkpoint";
-                break;
-            case ConveyorEventKind.CycleCompleted:
-                IsWaitingForRobotCompletion = false;
-                SensorStatus = "Sensor armed";
-                CycleStage = "Cycle completed — conveyor resumed";
-                break;
-            case ConveyorEventKind.MotorAcknowledged:
-                MotorStatus = line;
-                break;
+            InvalidateHandshake("Arduino stopped: " + line);
+            return;
         }
+        string? cycleId = null;
+        string classifiedLine = line;
+        if (line.StartsWith("EVENT:", StringComparison.Ordinal))
+        {
+            string[] parts = line.Split(':');
+            if (parts.Length != 4 || parts[2] != _hostSession || !HandshakeReady ||
+                !uint.TryParse(parts[3], out uint number) || number == 0) return;
+            cycleId = parts[2] + ":" + parts[3];
+            classifiedLine = parts[0] + ":" + parts[1];
+            if (parts[1] == "SENSOR_DETECTED")
+            {
+                if (number <= _lastCycleNumber) return;
+                if (ActiveCycleId != null && ActiveCycleId != cycleId) { StopMotor(); return; }
+                _lastCycleNumber = number;
+                ActiveCycleId = cycleId;
+            }
+            else if (ActiveCycleId != cycleId) return;
+        }
+        ConveyorEventKind kind = ClassifyArduinoMessage(classifiedLine);
 
-        var args = new ConveyorEventArgs(kind, line, DateTime.Now);
-        ConveyorEventReceived?.Invoke(this, args);
-        if (kind == ConveyorEventKind.CameraStopped)
+        var args = new ConveyorEventArgs(kind, line, DateTime.Now, cycleId);
+        if (kind == ConveyorEventKind.CameraStopped && cycleId != null)
             CameraStopReached?.Invoke(this, args);
-        else if (kind == ConveyorEventKind.RobotStopped)
+        else if (kind == ConveyorEventKind.RobotStopped && cycleId != null)
             RobotStopReached?.Invoke(this, args);
+        else if (classifiedLine == "EVENT:READY_FOR_NEXT")
+            ActiveCycleId = null;
 
         if (kind != ConveyorEventKind.Heartbeat)
             SystemLogService.Add("CONVEYOR", $"Arduino: {line}");
@@ -446,6 +487,7 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
 
     private void ClosePort(bool sendStopFirst)
     {
+        InvalidateHandshake("Serial connection closed; active cycle cancelled.");
         SerialPort? port;
         lock (_serialLock)
         {
@@ -489,7 +531,6 @@ public partial class ConveyorControlViewModel : ObservableObject, IDisposable
         }
 
         IsConnected = false;
-        IsWaitingForRobotCompletion = false;
         SystemLogService.Add("CONVEYOR", "Serial connection closed.");
     }
 

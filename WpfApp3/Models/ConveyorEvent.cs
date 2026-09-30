@@ -15,8 +15,10 @@ public enum ConveyorEventKind
 public sealed class ConveyorEventArgs(
     ConveyorEventKind kind,
     string rawMessage,
-    DateTime receivedAt) : EventArgs
+    DateTime receivedAt,
+    string? cycleId = null) : EventArgs
 {
+    public string? CycleId { get; } = cycleId;
     public ConveyorEventKind Kind { get; } = kind;
     public string RawMessage { get; } = rawMessage;
     public DateTime ReceivedAt { get; } = receivedAt;

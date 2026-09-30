@@ -45,27 +45,6 @@ namespace WpfApp3.ViewModels
         private double cameraFrameRate = 0.0;
 
         [ObservableProperty]
-        private string lensType = "Standard";
-
-        [ObservableProperty]
-        private double exposureTime = 0.0;
-
-        [ObservableProperty]
-        private double cameraTemperature = 0.0;
-
-        [ObservableProperty]
-        private int capturedFrames = 0;
-
-        [ObservableProperty]
-        private string lastCaptureTime = "N/A";
-
-        [ObservableProperty]
-        private bool isRecording = false;
-
-        [ObservableProperty]
-        private int recordingDuration = 0;
-
-        [ObservableProperty]
         private ObservableCollection<string> availableCameras = new ObservableCollection<string>();
 
         private string? _selectedCameraName;
@@ -96,38 +75,15 @@ namespace WpfApp3.ViewModels
         private BitmapSource? cameraFrame;
 
         [ObservableProperty]
-        private string synchronizedCaptureStatus =
-            "Waiting for Arduino camera-stop event";
-
-        [ObservableProperty]
-        private string resolutionSwitchTestStatus =
-            "Resolution-switch timing test has not been run";
-
-        [ObservableProperty]
         private string aiServiceStatus = "Checking local AI service";
-
-        [ObservableProperty]
-        private string lastAiResult = "No result yet";
 
         [ObservableProperty]
         private InspectionResult? lastInspectionResult;
 
-        public event EventHandler<InspectionResult>? InspectionResultRequested;
-
-        public bool IsCameraRunning => _cameraService.IsRunning;
-
         public ObservableCollection<string> SessionSystemLog =>
             SystemLogService.SessionEntries;
 
-        public string LatestSystemLogEntry =>
-            SessionSystemLog.Count == 0
-                ? "No process event recorded"
-                : SessionSystemLog[^1];
-
         public int SystemLogEntryCount => SessionSystemLog.Count;
-
-        public string CurrentWorkflowStage =>
-            GetWorkflowStage(LatestSystemLogEntry);
 
         private Dictionary<string, CameraDevice> _cameraLookup = new();
 
@@ -159,10 +115,7 @@ namespace WpfApp3.ViewModels
             CameraResolution = $"{image.PixelWidth} x {image.PixelHeight}";
             PreviewResolution = CameraResolution;
             CameraFrameRate = 6.0;
-            SynchronizedCaptureStatus =
-                "Arduino-synchronized frame received (report preview)";
             AiServiceStatus = "Connected - YOLOv8 model ready (report preview)";
-            LastAiResult = "dented - 93.2% - 34.5 ms";
 
             AvailableCameras.Clear();
             AvailableCameras.Add("IMITECH IMB-770GC - report preview");
@@ -234,50 +187,7 @@ namespace WpfApp3.ViewModels
             object? sender,
             NotifyCollectionChangedEventArgs e)
         {
-            OnPropertyChanged(nameof(LatestSystemLogEntry));
             OnPropertyChanged(nameof(SystemLogEntryCount));
-            OnPropertyChanged(nameof(CurrentWorkflowStage));
-        }
-
-        private static string GetWorkflowStage(string entry)
-        {
-            if (entry.Contains("Phat hien PIN", StringComparison.OrdinalIgnoreCase) ||
-                entry.Contains("Dung truoc Camera", StringComparison.OrdinalIgnoreCase))
-            {
-                return "1. Arduino sensor positioning";
-            }
-
-            if (entry.Contains("[IMITECH]", StringComparison.OrdinalIgnoreCase))
-            {
-                return "2. Synchronized image acquisition";
-            }
-
-            if (entry.Contains("[AI]", StringComparison.OrdinalIgnoreCase))
-            {
-                return "3. Windows AI inspection";
-            }
-
-            if (entry.Contains("[AI ROUTING]", StringComparison.OrdinalIgnoreCase))
-            {
-                return "4. Jetson classification queue";
-            }
-
-            if (entry.Contains("[CONVEYOR]", StringComparison.OrdinalIgnoreCase))
-            {
-                return "5. Conveyor transport";
-            }
-
-            if (entry.Contains("[DOFBOT CAM]", StringComparison.OrdinalIgnoreCase))
-            {
-                return "6. DOFBOT vision trigger";
-            }
-
-            if (entry.Contains("[ROBOT]", StringComparison.OrdinalIgnoreCase))
-            {
-                return "7. Robot handling cycle";
-            }
-
-            return "System idle / initialization";
         }
 
         /// <summary>
@@ -390,8 +300,6 @@ namespace WpfApp3.ViewModels
                           $"{_cameraService.FrameHeight}"
                         : "Waiting for first frame";
                 CameraFrameRate = _cameraService.FramesPerSecond;
-                SynchronizedCaptureStatus =
-                    "Camera ready — waiting for Arduino camera-stop event";
                 LogMessage($"Connected to {SelectedCamera.Name}");
                 if (_cameraService is MvsCameraService mvsService)
                 {
@@ -426,7 +334,6 @@ namespace WpfApp3.ViewModels
                 PreviewResolution = "N/A";
                 CameraFrameRate = 0;
                 CameraFrame = null;
-                SynchronizedCaptureStatus = "Camera disconnected";
                 LogMessage("Disconnected from camera");
             }
             catch (Exception ex)
@@ -474,154 +381,14 @@ namespace WpfApp3.ViewModels
         }
 
         [RelayCommand]
-        private void Capture()
-        {
-            if (!_cameraService.IsRunning)
-            {
-                LogMessage("Camera is not running");
-                return;
-            }
-
-            try
-            {
-                string? filepath = _cameraService.CaptureFrame();
-                if (filepath != null)
-                {
-                    CapturedFrames++;
-                    LastCaptureTime = DateTime.Now.ToString("s");
-                    LogMessage($"Frame captured: {filepath}");
-                }
-                else
-                {
-                    LogMessage("Failed to capture frame");
-                }
-            }
-            catch (Exception ex)
-            {
-                LogMessage($"Error capturing frame: {ex.Message}");
-                Debug.WriteLine(ex);
-            }
-        }
-
-        [RelayCommand]
-        private async Task TestResolutionSwitch()
-        {
-            if (_cameraService is not MvsCameraService mvsService)
-            {
-                ResolutionSwitchTestStatus =
-                    "Unavailable for the active camera backend";
-                return;
-            }
-
-            if (!_cameraService.IsRunning)
-            {
-                ResolutionSwitchTestStatus =
-                    "Start the IMITECH camera before running the test";
-                LogMessage(
-                    "Resolution-switch timing test skipped because the camera is not running.");
-                return;
-            }
-
-            if (!await _synchronizedCaptureGate.WaitAsync(0))
-            {
-                ResolutionSwitchTestStatus =
-                    "Unavailable while an Arduino capture is in progress";
-                LogMessage(
-                    "Resolution-switch timing test skipped because an Arduino-synchronized capture is in progress.");
-                return;
-            }
-
-            try
-            {
-                ResolutionSwitchTestStatus =
-                    "Testing current ROI -> full resolution -> current ROI";
-                LogMessage(
-                    "Starting diagnostic resolution-switch timing test. " +
-                    "AI and robot routing remain disabled for this test.");
-
-                ResolutionSwitchTestResult result = await Task.Run(
-                    mvsService.RunResolutionSwitchTimingTest);
-                ResolutionSwitchTestStatus =
-                    $"Total {result.TotalMs:0} ms; first full frame " +
-                    $"{result.FirstFullFrameMs:0} ms";
-                CameraResolution =
-                    $"{_cameraService.FrameWidth} x {_cameraService.FrameHeight}";
-
-                LogMessage(
-                    $"Resolution-switch test complete: " +
-                    $"{result.OriginalWidth}x{result.OriginalHeight} -> " +
-                    $"{result.FullWidth}x{result.FullHeight} -> " +
-                    $"{result.OriginalWidth}x{result.OriginalHeight}; " +
-                    $"stop {result.StopAcquisitionMs:0.0} ms, " +
-                    $"configure full {result.ConfigureFullResolutionMs:0.0} ms, " +
-                    $"first full frame {result.FirstFullFrameMs:0.0} ms, " +
-                    $"save PNG {result.SaveFullFrameMs:0.0} ms, " +
-                    $"restore {result.RestorePreviewMs:0.0} ms, " +
-                    $"total {result.TotalMs:0.0} ms. " +
-                    $"Test image: {result.CapturedImagePath}");
-            }
-            catch (Exception ex)
-            {
-                ResolutionSwitchTestStatus =
-                    $"Test failed: {ex.Message}";
-                LogMessage(
-                    $"Resolution-switch timing test failed: {ex.Message}");
-            }
-            finally
-            {
-                _synchronizedCaptureGate.Release();
-            }
-        }
-
-        [RelayCommand]
-        private void StartRecording()
-        {
-            if (!IsRecording)
-            {
-                IsRecording = true;
-                RecordingDuration = 0;
-                LogMessage("Started recording");
-            }
-        }
-
-        [RelayCommand]
-        private void StopRecording()
-        {
-            if (IsRecording)
-            {
-                IsRecording = false;
-                LogMessage($"Stopped recording after {RecordingDuration} seconds");
-            }
-        }
-
-        [RelayCommand]
-        private void ClearLog()
-        {
-            SystemLogService.Clear();
-        }
-
-        [RelayCommand]
         private async Task CheckAiService() =>
             await CheckAiServiceAvailabilityAsync(logSuccess: true);
-
-        [RelayCommand]
-        private void ShowLastAiResult()
-        {
-            if (LastInspectionResult == null)
-            {
-                SystemLogService.Add("AI", "No AI inference result is available yet.");
-                return;
-            }
-
-            InspectionResultRequested?.Invoke(this, LastInspectionResult);
-        }
 
         public async Task<InspectionResult?> CaptureAndInspectFromArduinoAsync(
             CancellationToken cancellationToken = default)
         {
             if (!_cameraService.IsRunning)
             {
-                SynchronizedCaptureStatus = "Skipped — IMITECH camera is not running";
                 LogMessage(
                     "Arduino requested a synchronized capture, but the camera is not running.");
                 return null;
@@ -636,8 +403,6 @@ namespace WpfApp3.ViewModels
 
             try
             {
-                SynchronizedCaptureStatus =
-                    $"Camera stopped — stabilizing for {CameraStopSettleDelayMs} ms";
                 LogMessage(
                     "Arduino camera-stop event received; waiting for the " +
                     $"conveyor to settle for {CameraStopSettleDelayMs} ms.");
@@ -646,24 +411,17 @@ namespace WpfApp3.ViewModels
                     CameraStopSettleDelayMs,
                     cancellationToken);
 
-                // The 7826 firmware holds the camera checkpoint for about one
-                // second after emitting its stop message. Reconfiguring the
-                // sensor to full resolution took 1.4-1.7 seconds in testing,
-                // so the synchronized path deliberately captures the current
-                // ROI stream instead of switching resolution here.
+                // Capture a fresh frame from the configured ROI stream.
+                // Handshake firmware holds the conveyor until this inspection
+                // has finished and the caller acknowledges CAMERA_READY.
                 long frameSequenceAfterSettle =
                     _cameraService.FrameSequence;
-                SynchronizedCaptureStatus =
-                    "Waiting for a fresh IMITECH frame";
-
                 bool freshFrameAvailable =
                     await WaitForFreshFrameAfterAsync(
                         frameSequenceAfterSettle,
                         cancellationToken);
                 if (!freshFrameAvailable)
                 {
-                    SynchronizedCaptureStatus =
-                        "Skipped — no fresh frame after conveyor stop";
                     LogMessage(
                         "Synchronized capture was skipped because IMITECH " +
                         $"did not deliver a new frame within {FreshFrameTimeoutMs} ms.");
@@ -678,27 +436,19 @@ namespace WpfApp3.ViewModels
 
                 if (path == null)
                 {
-                    SynchronizedCaptureStatus = "Capture failed";
                     LogMessage("Arduino-synchronized frame could not be saved.");
                     return null;
                 }
 
-                CapturedFrames++;
-                LastCaptureTime = DateTime.Now.ToString("s");
                 LogMessage(
                     $"Arduino-synchronized raw frame captured for AI: {path}");
-                SynchronizedCaptureStatus = "Running YOLO inspection";
                 InspectionResult? result = await RunAiInferenceAsync(
                     path,
                     cancellationToken);
-                SynchronizedCaptureStatus = result == null
-                    ? "AI inspection failed"
-                    : $"Completed — {result.DetectedClass} ({result.Confidence:P1})";
                 return result;
             }
             catch (Exception ex)
             {
-                SynchronizedCaptureStatus = "Synchronized capture failed";
                 LogMessage($"Arduino-synchronized capture failed: {ex.Message}");
                 return null;
             }
@@ -856,7 +606,7 @@ namespace WpfApp3.ViewModels
                 startInfo.ArgumentList.Add("--imgsz");
                 startInfo.ArgumentList.Add(
                     Environment.GetEnvironmentVariable("AI_IMAGE_SIZE") ??
-                    "640");
+                    "512");
 
                 _ownedAiServiceProcess = Process.Start(startInfo);
                 SystemLogService.Add(
@@ -1035,9 +785,6 @@ namespace WpfApp3.ViewModels
                         response.DetectedClass)
                     ? "no battery"
                     : response.DetectedClass;
-                LastAiResult =
-                    $"{displayedClass} — {response.Confidence:P1} — " +
-                    $"{response.InferenceTimeMs:0.0} ms";
                 AiServiceStatus = "Connected — last inference completed";
                 SystemLogService.Add(
                     "AI",
@@ -1050,7 +797,6 @@ namespace WpfApp3.ViewModels
             catch (Exception ex)
             {
                 AiServiceStatus = "Inference failed";
-                LastAiResult = "AI error";
                 SystemLogService.Add("AI", $"Inference failed: {ex.Message}");
                 return null;
             }

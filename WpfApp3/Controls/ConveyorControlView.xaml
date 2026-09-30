@@ -41,14 +41,17 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
+            <TextBlock Grid.Column="0"
+                       Text="PWM"
+                       Style="{StaticResource LabelStyle}"/>
             <TextBlock Grid.Column="1"
                        Text="{Binding SelectedPwm}"
                        Foreground="{StaticResource SuccessBrush}"
                        FontWeight="Bold"/>
         </Grid>
         <Slider Minimum="0"
-                Maximum="120"
-                TickFrequency="10"
+                Maximum="170"
+                TickFrequency="5"
                 IsSnapToTickEnabled="True"
                 Value="{Binding SelectedPwm, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                 IsEnabled="{Binding IsConnected}"
