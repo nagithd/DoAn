@@ -65,12 +65,18 @@ def main() -> int:
     output = args.output.resolve()
     text = source.read_text(encoding="utf-8")
 
-    text = replace_exactly_once(
-        text,
-        PROCESSING_DISABLED,
-        PROCESSING_ENABLED,
-        "VISION_PROCESSING_ENABLED",
-    )
+    if PROCESSING_DISABLED in text:
+        text = replace_exactly_once(
+            text,
+            PROCESSING_DISABLED,
+            PROCESSING_ENABLED,
+            "VISION_PROCESSING_ENABLED",
+        )
+    elif text.count(PROCESSING_ENABLED) != 1:
+        raise RuntimeError(
+            "Expected one VISION_PROCESSING_ENABLED marker. "
+            "The source layout has changed; inspect it before deployment."
+        )
     text = replace_exactly_once(
         text,
         LOAD_GUARD,

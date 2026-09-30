@@ -27,7 +27,7 @@ if not exist "%WPF_EXE%" (
 tasklist /FI "IMAGENAME eq BatteryAIService.exe" 2>NUL | find /I "BatteryAIService.exe" >NUL
 if errorlevel 1 (
     echo Starting Battery AI Service...
-    start "Battery AI Service" /min "%AI_EXE%" --model "%MODEL%" --host 127.0.0.1 --port 7100
+    start "Battery AI Service" /min "%AI_EXE%" --model "%MODEL%" --host 127.0.0.1 --port 7100 --device cpu --imgsz 512
 ) else (
     echo Battery AI Service is already running.
 )

@@ -2,7 +2,7 @@ param(
     [string]$ModelPath = (Join-Path (Split-Path -Parent $PSScriptRoot) "models\best.pt"),
     [int]$Port = 7100,
     [double]$Confidence = 0.25,
-    [int]$ImageSize = 640,
+    [int]$ImageSize = 512,
     [int]$CpuThreads = 2
 )
 

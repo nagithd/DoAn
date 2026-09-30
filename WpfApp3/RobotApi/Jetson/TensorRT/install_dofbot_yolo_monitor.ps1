@@ -99,6 +99,8 @@ $ConfigBody = @{
     # dofbot_robot_api is created with --network host, so loopback reaches
     # the TensorRT sidecar on the Jetson host without Docker bridge routing.
     detector_url = "http://127.0.0.1:7101/infer"
+    preview_jpeg_quality = 70
+    preview_max_fps = 10
     # Cover the visible conveyor surface while excluding most of the bright
     # lower rail. These values also override an older persisted config file.
     entry_zone_center_x_ratio = 0.50
@@ -168,4 +170,6 @@ $Status | ConvertTo-Json -Depth 10
 Write-Host ""
 Write-Host "DOFBOT YOLO monitor-only test is active."
 Write-Host "No robot motion or auto-trigger endpoint was invoked."
-Write-Host "Frame URL: $BaseUri/vision/frame.jpg"
+Write-Host "MJPEG preview: $BaseUri/vision/stream.mjpg"
+Write-Host "Raw JPEG fallback: $BaseUri/vision/frame.jpg"
+Write-Host "Annotated JPEG: $BaseUri/vision/annotated.jpg"
